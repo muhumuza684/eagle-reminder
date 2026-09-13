@@ -11,7 +11,7 @@ function cloudRow(overrides: Partial<CloudCommitmentRow> = {}): CloudCommitmentR
 
 describe("mergeCommitments — conflict resolution between local and cloud state", () => {
   it("keeps an unsynced local commitment (client-timestamp id) even when the cloud fetch doesn't mention it", () => {
-    const unsynced = local({ id: Date.now().toString(), title: "Not yet synced" });
+    const unsynced = local({ id: "client_test_unsynced_1", title: "Not yet synced" });
     const merged = mergeCommitments([unsynced], []);
     expect(merged).toHaveLength(1);
     expect(merged[0].title).toBe("Not yet synced");
@@ -57,7 +57,7 @@ describe("mergeCommitments — conflict resolution between local and cloud state
   });
 
   it("handles a realistic mixed batch: one unsynced capture, one failed edit, one clean sync, one cloud-only, one suppressed delete", () => {
-    const unsynced = local({ id: "1757308800123", title: "Captured offline" });
+    const unsynced = local({ id: "client_test_unsynced_2", title: "Captured offline" });
     const failedEdit = local({ id: "2", title: "My edit that failed to sync", syncFailed: true });
     const clean = local({ id: "3", title: "old" });
     const local4 = local({ id: "4" }); // will be suppressed (deleted this session)
@@ -69,7 +69,7 @@ describe("mergeCommitments — conflict resolution between local and cloud state
     ];
     const merged = mergeCommitments([unsynced, failedEdit, clean, local4], cloud, new Set(["4"]));
     const byId = Object.fromEntries(merged.map((item) => [item.id, item.title]));
-    expect(byId["1757308800123"]).toBe("Captured offline");
+    expect(byId["client_test_unsynced_2"]).toBe("Captured offline");
     expect(byId["2"]).toBe("My edit that failed to sync");
     expect(byId["3"]).toBe("Fresh from server");
     expect(byId["4"]).toBeUndefined();
