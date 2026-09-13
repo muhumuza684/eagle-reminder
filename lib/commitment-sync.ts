@@ -11,6 +11,9 @@
 
 export type SyncableCommitment = {
   id: string;
+  clientId?: string;
+  serverId?: number;
+  revision?: number;
   title: string;
   category: string;
   scheduledDate: string;
@@ -52,8 +55,8 @@ export type CloudCommitmentRow = {
  * smaller server autoincrement id. Flagged there as a stopgap, not a real
  * invariant — see FIXES-LOG.md.
  */
-function isUnsyncedLocalId(id: string): boolean {
-  return !/^\d+$/.test(id) || id.length >= 13;
+function isUnsyncedLocalId(id: string, clientId?: string): boolean {
+  return Boolean(clientId) || !/^\d+$/.test(id);
 }
 
 export function cloudRowToCommitment(row: CloudCommitmentRow): SyncableCommitment {
@@ -111,7 +114,7 @@ export function mergeCommitments(local: SyncableCommitment[], cloud: CloudCommit
     // A real server id that's absent from a full, successful cloud fetch
     // means the row genuinely no longer exists server-side (deleted
     // elsewhere) — only an unsynced local id is worth keeping here.
-    if (isUnsyncedLocalId(item.id)) merged.push(item);
+    if (isUnsyncedLocalId(item.id, item.clientId)) merged.push(item);
   }
 
   return merged;

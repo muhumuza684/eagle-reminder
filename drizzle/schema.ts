@@ -36,6 +36,8 @@ export const users = mysqlTable("users", {
 });
 
 export const commitments = mysqlTable("commitments", {
+  clientId: varchar("clientId", { length: 36 }).unique(),
+  revision: int("revision").default(1).notNull(),
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   title: varchar("title", { length: 255 }).notNull(),

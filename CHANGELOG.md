@@ -1,0 +1,7 @@
+- Added cryptographically random UUIDv4 client identity.
+- Added domain commitment contract and revision semantics.
+- Added application create/revise service.
+- Added timezone-aware clock/date-key abstraction.
+- Added identity/domain/clock tests.
+- Added typecheck/test/validate scripts.
+- Added migration for clientId/revision.

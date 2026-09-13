@@ -1,4 +1,7 @@
-// Base file, unchanged except for one addition (Tier 3 #11, marked below).
+import { createClientId } from "@/lib/identity";
+
+// Tier 1: identity is generated independently of wall-clock time.
+
 export type ParsedCommitment = {
   id: string;
   title: string;
@@ -51,5 +54,5 @@ export function parseCommitment(text: string): ParsedCommitment {
   const timeEnd = `${String(Math.min(hour + 1, 23)).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   const meeting = extractMeetingLink(text);
   const cleaned = text.replace(/https?:\/\/[^\s]+/i, "").replace(/\b(today|tomorrow|at|by)\b/gi, "").replace(/\b([01]?\d|2[0-3])(?::[0-5]\d)?\s*(am|pm)?\b/gi, "").replace(/\s+/g, " ").trim();
-  return { id: Date.now().toString(), title: cleaned.charAt(0).toUpperCase() + cleaned.slice(1) || "Untitled commitment", category: inferCategory(text), timeStart, timeEnd, priority: /urgent|critical|important|must/i.test(text) ? "high" : "medium", status: "active", riskState: hour >= 18 ? "at_risk" : "stable", meetingProvider: meeting?.provider, meetingUrl: meeting?.url, scheduledDate: new Date().toISOString().slice(0, 10) };
+  return { id: createClientId(), title: cleaned.charAt(0).toUpperCase() + cleaned.slice(1) || "Untitled commitment", category: inferCategory(text), timeStart, timeEnd, priority: /urgent|critical|important|must/i.test(text) ? "high" : "medium", status: "active", riskState: hour >= 18 ? "at_risk" : "stable", meetingProvider: meeting?.provider, meetingUrl: meeting?.url, scheduledDate: new Date().toISOString().slice(0, 10) };
 }
