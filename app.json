@@ -33,7 +33,11 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-speech-recognition",
+      "@react-native-community/datetimepicker",
+      "expo-sharing",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

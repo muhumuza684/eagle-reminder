@@ -1,0 +1,2238 @@
+﻿DEAGLE HUB BACKEND FIX REPORT
+Generated: 2026-09-11 19:33:26
+
+
+====================================================
+== package.json
+====================================================
+
+{
+  "name": "d-eagle-hub",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "9.1.0",
+    "@react-navigation/bottom-tabs": "^7.18.18",
+    "@tanstack/react-query": "^5.102.8",
+    "@trpc/client": "^11.18.0",
+    "@trpc/react-query": "^11.18.0",
+    "@trpc/server": "^11.18.0",
+    "drizzle-orm": "^0.45.2",
+    "expo": "~57.0.21",
+    "expo-constants": "~57.0.17",
+    "expo-font": "~57.0.3",
+    "expo-haptics": "~57.0.2",
+    "expo-linking": "~57.0.9",
+    "expo-notifications": "~57.0.17",
+    "expo-router": "~57.0.20",
+    "expo-server-sdk": "^7.2.0",
+    "expo-sharing": "~57.0.18",
+    "expo-speech": "~57.0.2",
+    "expo-speech-recognition": "^57.0.0",
+    "expo-splash-screen": "~57.0.8",
+    "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.2",
+    "expo-web-browser": "~57.0.2",
+    "mysql2": "^3.24.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-view-shot": "5.1.0",
+    "react-native-web": "~0.21.0",
+    "react-native-worklets": "0.10.1",
+    "superjson": "^2.2.6",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
+
+
+
+====================================================
+== tsconfig.json
+====================================================
+
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
+
+
+
+====================================================
+== app.json
+====================================================
+
+{
+  "expo": {
+    "name": "d-eagle-hub",
+    "slug": "d-eagle-hub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "deaglehub",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-speech-recognition",
+      "@react-native-community/datetimepicker",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
+
+
+
+====================================================
+== app/_layout.tsx
+====================================================
+
+import { useEffect, useState } from "react";
+import { Stack } from "expo-router";
+import * as Linking from "expo-linking";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { trpc, createTRPCClient } from "@/lib/trpc";
+import { AuthGate } from "@/components/auth-gate";
+import { completeOAuthFromUrl } from "@/lib/_core/auth";
+
+function DeepLinkAuthListener() {
+  const utils = trpc.useUtils();
+
+  useEffect(() => {
+    const handleUrl = async (url: string) => {
+      const completed = await completeOAuthFromUrl(url);
+      if (completed) utils.auth.me.invalidate();
+    };
+    Linking.getInitialURL().then((url) => { if (url) handleUrl(url); });
+    const subscription = Linking.addEventListener("url", (event) => handleUrl(event.url));
+    return () => subscription.remove();
+  }, [utils]);
+
+  return null;
+}
+
+export default function RootLayout() {
+  const [queryClient] = useState(() => new QueryClient());
+  const [trpcClient] = useState(() => createTRPCClient());
+
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <DeepLinkAuthListener />
+        <AuthGate>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </AuthGate>
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
+}
+
+
+
+====================================================
+== app/(tabs)/_layout.tsx
+====================================================
+
+import { Tabs } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
+import { HapticTab } from "@/components/haptic-tab";
+import { useColors } from "@/hooks/use-colors";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+
+export default function TabLayout() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
+  return <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: colors.primary, tabBarInactiveTintColor: colors.muted, tabBarButton: HapticTab, tabBarStyle: { paddingTop: 8, paddingBottom: bottomPadding, height: 56 + bottomPadding, backgroundColor: colors.background, borderTopColor: colors.border, borderTopWidth: 0.5 } }}>
+    <Tabs.Screen name="index" options={{ title: "Today", tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} /> }} />
+    <Tabs.Screen name="review" options={{ title: "Review", tabBarIcon: ({ color }) => <IconSymbol size={24} name="moon.fill" color={color} /> }} />
+    <Tabs.Screen name="dashboard" options={{ title: "Signal", tabBarIcon: ({ color }) => <IconSymbol size={24} name="chart.bar.fill" color={color} /> }} />
+    <Tabs.Screen name="settings" options={{ title: "Settings", tabBarIcon: ({ color }) => <IconSymbol size={24} name="gearshape.fill" color={color} /> }} />
+  </Tabs>;
+}
+
+
+
+====================================================
+== components/haptic-tab.tsx
+====================================================
+
+import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import * as Haptics from "expo-haptics";
+import { Platform, Pressable } from "react-native";
+
+export function HapticTab(props: BottomTabBarButtonProps) {
+  return (
+    <Pressable
+      {...props}
+      onPressIn={(ev) => {
+        if (Platform.OS === "ios") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        props.onPressIn?.(ev);
+      }}
+    />
+  );
+}
+
+
+
+====================================================
+== server/routers.ts
+====================================================
+
+// MERGED â€” see MERGE-NOTES.md. Uses c_next_sequence's create/update flow
+// (client sends an explicit `criticalDeadline`, computed by
+// parseCriticalCommitment at capture time) combined with a_section7's
+// richer checkpoint status model (a single `status` enum, not two booleans,
+// so the client's acknowledge/escalate/expire tick loop has one field to
+// read and write instead of reconciling two).
+
+import { z } from "zod";
+import { COOKIE_NAME } from "../shared/const";
+import { getSessionCookieOptions } from "./_core/cookies";
+import { systemRouter } from "./_core/systemRouter";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import * as db from "./db";
+import { invokeLLM } from "./_core/llm";
+import { buildCriticalCheckpoints } from "../lib/critical-cascade";
+import { rateLimited } from "./rateLimit";
+import { log } from "./logger";
+
+const commitmentInput = z.object({
+  title: z.string().min(1).max(255),
+  category: z.string().max(64),
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  timeStart: z.string().regex(/^\d{2}:\d{2}$/),
+  timeEnd: z.string().regex(/^\d{2}:\d{2}$/),
+  priority: z.enum(["high", "medium", "low"]),
+  status: z.enum(["active", "completed", "rescheduled", "missed"]).default("active"),
+  riskState: z.enum(["stable", "at_risk", "rescued", "missed"]).default("stable"),
+  critical: z.boolean().default(false),
+  // The "before Y" deadline the two critical checkpoints are computed from (FR-G2).
+  criticalDeadline: z.string().datetime().optional(),
+  meetingProvider: z.enum(["zoom", "meet"]).optional(),
+  meetingUrl: z.string().url().max(500).optional(),
+  warningMuted: z.boolean().optional(),
+});
+
+const commitmentUpdateInput = z.object({
+  id: z.number(),
+  status: z.enum(["active", "completed", "rescheduled", "missed"]).optional(),
+  riskState: z.enum(["stable", "at_risk", "rescued", "missed"]).optional(),
+  critical: z.boolean().optional(),
+  criticalDeadline: z.string().datetime().nullable().optional(),
+  meetingProvider: z.enum(["zoom", "meet"]).optional(),
+  meetingUrl: z.string().url().max(500).optional(),
+  warningMuted: z.boolean().nullable().optional(),
+});
+
+const preferencesInput = z.object({
+  briefingHour: z.number().int().min(0).max(23).optional(),
+  reviewHour: z.number().int().min(0).max(23).optional(),
+  notificationsEnabled: z.boolean().optional(),
+  voiceEnabled: z.boolean().optional(),
+  meetingChimeMuted: z.boolean().optional(),
+  earlyWarningMuted: z.boolean().optional(),
+  shareTheme: z.string().max(32).optional(),
+});
+
+const checkpointStatusInput = z.enum(["pending", "acknowledged", "escalated", "missed"]);
+
+/** Builds the two DB-ready checkpoint rows (stage + dueAt) for a given deadline (FR-G2). */
+function computeCheckpointRows(deadline: Date) {
+  return buildCriticalCheckpoints(deadline).map((checkpoint) => ({ stage: checkpoint.stage, dueAt: new Date(checkpoint.dueAt) }));
+}
+
+export const appRouter = router({
+  system: systemRouter,
+  auth: router({
+    me: publicProcedure.query((opts) => opts.ctx.user),
+    logout: publicProcedure.mutation(({ ctx }) => { const cookieOptions = getSessionCookieOptions(ctx.req); ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 }); return { success: true } as const; }),
+    // Tier 2 #5 â€” the client calls this once on launch (and whenever its
+    // detected zone changes) with `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+    // Loosely rate-limited since it should fire rarely, not on every render.
+    updateLocale: rateLimited("auth.updateLocale", 10, 60_000).input(z.object({ timezone: z.string().min(1).max(64), language: z.string().min(2).max(8).optional() })).mutation(({ ctx, input }) => db.updateUserLocale(ctx.user.id, input).then(() => ({ success: true } as const))),
+  }),
+  quotes: router({
+    generate: rateLimited("quotes.generate", 5, 60_000).input(z.object({ completionRate: z.number().int().min(0).max(100), topCategory: z.string().max(64), completed: z.number().int().min(0), closed: z.number().int().min(0) })).mutation(async ({ input }) => { const response = await invokeLLM({ model: "gpt-5-mini", messages: [{ role: "system", content: "Write one concise, warm, personalized motivational quote. Return only the quote, no quotation marks." }, { role: "user", content: `Recent achievements: ${input.completed} of ${input.closed} closed commitments completed (${input.completionRate}%). Top category: ${input.topCategory}.` }], maxTokens: 80 }); const content = response.choices?.[0]?.message?.content; return { quote: typeof content === "string" && content.trim() ? content.trim().replace(/^['\"]|['\"]$/g, "") : "You kept showing up; that is how momentum becomes yours." }; }),
+  }),
+  snapshots: router({
+    list: protectedProcedure.query(({ ctx }) => db.getUserSnapshots(ctx.user.id)),
+    upsert: protectedProcedure.input(z.object({ snapshotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), category: z.string().max(64), priority: z.string().max(16).default("all"), completed: z.number().int().min(0), closed: z.number().int().min(0) })).mutation(({ ctx, input }) => db.upsertUserSnapshot({ userId: ctx.user.id, ...input })),
+  }),
+  commitments: router({
+    list: protectedProcedure.query(({ ctx }) => db.getUserCommitments(ctx.user.id)),
+    create: rateLimited("commitments.create", 40, 60_000).input(commitmentInput).mutation(async ({ ctx, input }) => {
+      const { criticalDeadline, ...rest } = input;
+      const id = await db.createCommitment({ userId: ctx.user.id, ...rest, criticalDeadline: criticalDeadline ? new Date(criticalDeadline) : undefined });
+      if (input.critical && criticalDeadline) await db.replaceCriticalCheckpoints(ctx.user.id, id, computeCheckpointRows(new Date(criticalDeadline)));
+      log({ event: "commitment.created", level: "info", userId: ctx.user.id, commitmentId: id, critical: input.critical });
+      return id;
+    }),
+    update: rateLimited("commitments.update", 90, 60_000).input(commitmentUpdateInput).mutation(async ({ ctx, input }) => {
+      const { id, criticalDeadline, ...rest } = input;
+      const patch: Record<string, unknown> = { ...rest };
+      if (criticalDeadline !== undefined) patch.criticalDeadline = criticalDeadline ? new Date(criticalDeadline) : null;
+      await db.updateUserCommitment(ctx.user.id, id, patch);
+      if (input.critical === false) await db.clearCriticalCheckpoints(ctx.user.id, id);
+      else if (input.critical && criticalDeadline) await db.replaceCriticalCheckpoints(ctx.user.id, id, computeCheckpointRows(new Date(criticalDeadline)));
+      return { success: true } as const;
+    }),
+    // Tier 1 #3 â€” was previously impossible: a mis-capture could only ever
+    // have its status changed, never actually be removed.
+    delete: rateLimited("commitments.delete", 30, 60_000).input(z.object({ id: z.number() })).mutation(({ ctx, input }) => db.deleteUserCommitment(ctx.user.id, input.id).then(() => { log({ event: "commitment.deleted", level: "info", userId: ctx.user.id, commitmentId: input.id }); return { success: true } as const; })),
+  }),
+  checkpoints: router({
+    listForCommitment: protectedProcedure.input(z.object({ commitmentId: z.number() })).query(({ ctx, input }) => db.getCommitmentCheckpoints(ctx.user.id, input.commitmentId)),
+    list: protectedProcedure.query(({ ctx }) => db.getUserCheckpoints(ctx.user.id)),
+    // Single status-transition endpoint (pending -> acknowledged / escalated / missed) â€”
+    // the client's 30s tick loop in index.tsx computes the next status locally via
+    // lib/critical-cascade.ts (shouldEscalate / expireUnacknowledged) and persists the
+    // result here, rather than the server owning separate acknowledge/escalate mutations.
+    update: rateLimited("checkpoints.update", 60, 60_000).input(z.object({ id: z.number(), status: checkpointStatusInput })).mutation(({ ctx, input }) => db.updateCheckpoint(ctx.user.id, input.id, { status: input.status, acknowledgedAt: input.status === "acknowledged" ? new Date() : undefined }).then(() => {
+      // "acknowledged" is the everything's-fine case and would just be
+      // noise at info-level on every tap; escalated/missed are exactly the
+      // failures the product's trust-latency thesis depends on being able
+      // to prove happened, so those get logged at warn.
+      log({ event: "checkpoint.status_changed", level: input.status === "escalated" || input.status === "missed" ? "warn" : "info", userId: ctx.user.id, checkpointId: input.id, status: input.status });
+    })),
+  }),
+  // Tier 3 #12 â€” the client already fetches an Expo push token
+  // (lib/native-services.ts's registerForNotifications) but had nowhere to
+  // send it. This is that endpoint.
+  notifications: router({
+    registerToken: rateLimited("notifications.registerToken", 10, 60_000).input(z.object({ token: z.string().min(1).max(128), platform: z.enum(["ios", "android", "web"]) })).mutation(({ ctx, input }) => db.registerPushToken(ctx.user.id, input.token, input.platform).then(() => ({ success: true } as const))),
+    unregisterToken: rateLimited("notifications.unregisterToken", 10, 60_000).input(z.object({ token: z.string().min(1).max(128) })).mutation(({ ctx, input }) => db.unregisterPushToken(ctx.user.id, input.token).then(() => ({ success: true } as const))),
+  }),
+  preferences: router({
+    get: protectedProcedure.query(({ ctx }) => db.getUserPreferences(ctx.user.id)),
+    upsert: protectedProcedure.input(preferencesInput).mutation(({ ctx, input }) => db.upsertUserPreferences(ctx.user.id, input)),
+  }),
+});
+export type AppRouter = typeof appRouter;
+
+
+
+====================================================
+== server/db.ts
+====================================================
+
+// MERGED â€” see MERGE-NOTES.md. Base helpers are unchanged from the
+// original project; the "Critical checkpoints" and "User preferences"
+// sections below are the reconciled versions of both patches.
+
+import { and, eq, asc, isNull, isNotNull, lt } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import {
+  commitments,
+  criticalCheckpoints,
+  InsertCommitment,
+  InsertCriticalCheckpoint,
+  InsertPushToken,
+  InsertUser,
+  InsertUserPreferences,
+  InsertWeeklySnapshot,
+  pushTokens,
+  userPreferences,
+  users,
+  weeklySnapshots,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
+import { DEFAULT_PREFERENCES } from "../lib/preferences";
+
+let _db: ReturnType<typeof drizzle> | null = null;
+export async function getDb() { if (!_db && process.env.DATABASE_URL) { try { _db = drizzle(process.env.DATABASE_URL); } catch { _db = null; } } return _db; }
+
+export async function upsertUser(user: InsertUser): Promise<void> {
+  if (!user.openId) throw new Error("User openId is required for upsert");
+  const db = await getDb(); if (!db) return;
+  const values: InsertUser = { openId: user.openId, name: user.name ?? null, email: user.email ?? null, loginMethod: user.loginMethod ?? null, lastSignedIn: user.lastSignedIn ?? new Date() };
+  const updateSet: Record<string, unknown> = { name: values.name, email: values.email, loginMethod: values.loginMethod, lastSignedIn: values.lastSignedIn };
+  // Tier 2 #5 â€” optional so this call stays backward-compatible with
+  // whatever platform-managed login flow already calls upsertUser without
+  // knowing about these fields; the column defaults ("UTC"/"en") cover it
+  // either way. Only set on INSERT (new user), not on every re-login,
+  // because updateUserLocale (below) is the deliberate path for changing
+  // an existing user's locale â€” this avoids clobbering it with a stale
+  // client-detected value on every sign-in.
+  if (user.timezone) values.timezone = user.timezone;
+  if (user.language) values.language = user.language;
+  if (user.role) { values.role = user.role; updateSet.role = user.role; } else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
+  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+}
+
+/**
+ * Tier 2 #5 â€” the deliberate path for setting/changing a user's timezone
+ * and language, called from the client (e.g. on first launch, via
+ * `Intl.DateTimeFormat().resolvedOptions().timeZone`) rather than baked
+ * into login, so a user who travels can have it refreshed without it
+ * fighting the login upsert above.
+ */
+export async function updateUserLocale(userId: number, patch: { timezone?: string; language?: string }) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  await db.update(users).set(patch).where(eq(users.id, userId));
+}
+
+export async function getUserByOpenId(openId: string) { const db = await getDb(); if (!db) return undefined; const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1); return result[0]; }
+export async function getUserCommitments(userId: number) { const db = await getDb(); if (!db) return []; return db.select().from(commitments).where(and(eq(commitments.userId, userId), isNull(commitments.deletedAt))).orderBy(asc(commitments.scheduledDate), asc(commitments.timeStart)); }
+export async function createCommitment(data: InsertCommitment) { const db = await getDb(); if (!db) throw new Error("Database not available"); const result = await db.insert(commitments).values(data); return Number(result[0].insertId); }
+export async function updateUserCommitment(userId: number, id: number, data: Partial<InsertCommitment>) { const db = await getDb(); if (!db) throw new Error("Database not available"); await db.update(commitments).set(data).where(and(eq(commitments.id, id), eq(commitments.userId, userId), isNull(commitments.deletedAt))); }
+
+/**
+ * Tier 2 #6 â€” was a hard delete (Tier 1 #3's original version). Now a soft
+ * delete: sets `deletedAt` instead of removing the row, so an accidental
+ * delete is recoverable and there's an audit trail. Scoped to `userId` so
+ * a user can only ever delete their own row.
+ */
+export async function deleteUserCommitment(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  const now = new Date();
+  await db.update(criticalCheckpoints).set({ deletedAt: now }).where(and(eq(criticalCheckpoints.userId, userId), eq(criticalCheckpoints.commitmentId, id)));
+  await db.update(commitments).set({ deletedAt: now }).where(and(eq(commitments.id, id), eq(commitments.userId, userId)));
+}
+
+/** Reverses deleteUserCommitment â€” not currently wired to any client action, kept ready for an "Undo" affordance. */
+export async function restoreUserCommitment(userId: number, id: number) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  await db.update(commitments).set({ deletedAt: null }).where(and(eq(commitments.id, id), eq(commitments.userId, userId)));
+  await db.update(criticalCheckpoints).set({ deletedAt: null }).where(and(eq(criticalCheckpoints.userId, userId), eq(criticalCheckpoints.commitmentId, id)));
+}
+
+/**
+ * Genuinely, permanently removes soft-deleted rows older than `olderThanDays`.
+ * Not called anywhere yet â€” intended to be invoked from a periodic job once
+ * one exists (see FIXES-LOG.md Tier 2 #8 / structured logging â€” the same
+ * "no scheduled job infrastructure yet" gap applies here), so soft-deleted
+ * data doesn't accumulate forever without an actual data-retention policy.
+ */
+export async function purgeSoftDeletedCommitments(olderThanDays = 30) {
+  const db = await getDb(); if (!db) return;
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+  await db.delete(criticalCheckpoints).where(and(isNotNull(criticalCheckpoints.deletedAt), lt(criticalCheckpoints.deletedAt, cutoff)));
+  await db.delete(commitments).where(and(isNotNull(commitments.deletedAt), lt(commitments.deletedAt, cutoff)));
+}
+export async function getUserSnapshots(userId: number) { const db = await getDb(); if (!db) return []; return db.select().from(weeklySnapshots).where(eq(weeklySnapshots.userId, userId)).orderBy(asc(weeklySnapshots.snapshotDate)); }
+export async function upsertUserSnapshot(data: InsertWeeklySnapshot) { const db = await getDb(); if (!db) throw new Error("Database not available"); const existing = await db.select().from(weeklySnapshots).where(and(eq(weeklySnapshots.userId, data.userId), eq(weeklySnapshots.snapshotDate, data.snapshotDate), eq(weeklySnapshots.category, data.category), eq(weeklySnapshots.priority, data.priority ?? "all"))).limit(1); if (existing[0]) { await db.update(weeklySnapshots).set({ completed: data.completed, closed: data.closed }).where(eq(weeklySnapshots.id, existing[0].id)); return existing[0].id; } const result = await db.insert(weeklySnapshots).values(data); return Number(result[0].insertId); }
+
+// --- Critical checkpoints (exactly two per critical commitment â€” FR-G2) ----
+
+export async function getCommitmentCheckpoints(userId: number, commitmentId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(criticalCheckpoints).where(and(eq(criticalCheckpoints.userId, userId), eq(criticalCheckpoints.commitmentId, commitmentId), isNull(criticalCheckpoints.deletedAt))).orderBy(asc(criticalCheckpoints.dueAt));
+}
+
+export async function getUserCheckpoints(userId: number) {
+  const db = await getDb(); if (!db) return [];
+  return db.select().from(criticalCheckpoints).where(and(eq(criticalCheckpoints.userId, userId), isNull(criticalCheckpoints.deletedAt))).orderBy(asc(criticalCheckpoints.dueAt));
+}
+
+/**
+ * Replaces any existing checkpoints for a commitment with exactly the two
+ * rows passed in (FR-G2). Called whenever a commitment is flagged critical
+ * or its deadline changes, so a commitment never ends up with more or fewer
+ * than two checkpoints.
+ */
+export async function replaceCriticalCheckpoints(userId: number, commitmentId: number, rows: Array<{ stage: "day_before" | "three_hours"; dueAt: Date }>) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  await db.delete(criticalCheckpoints).where(and(eq(criticalCheckpoints.userId, userId), eq(criticalCheckpoints.commitmentId, commitmentId)));
+  if (rows.length === 0) return [];
+  const values: InsertCriticalCheckpoint[] = rows.map((row) => ({ userId, commitmentId, stage: row.stage, dueAt: row.dueAt, status: "pending" }));
+  await db.insert(criticalCheckpoints).values(values);
+  return getCommitmentCheckpoints(userId, commitmentId);
+}
+
+/** Soft-delete (Tier 2 #6) â€” called when a critical flag is removed. See the deletedAt comment on criticalCheckpoints in schema.ts for why replaceCriticalCheckpoints (below/above) stays a hard delete instead. */
+export async function clearCriticalCheckpoints(userId: number, commitmentId: number) {
+  const db = await getDb(); if (!db) return;
+  await db.update(criticalCheckpoints).set({ deletedAt: new Date() }).where(and(eq(criticalCheckpoints.userId, userId), eq(criticalCheckpoints.commitmentId, commitmentId)));
+}
+
+/** Sets a checkpoint's status directly â€” used for acknowledge/escalate/expire transitions from lib/critical-cascade.ts. */
+export async function updateCheckpoint(userId: number, id: number, data: Partial<InsertCriticalCheckpoint>) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  await db.update(criticalCheckpoints).set(data).where(and(eq(criticalCheckpoints.id, id), eq(criticalCheckpoints.userId, userId), isNull(criticalCheckpoints.deletedAt)));
+}
+
+// --- User preferences (server-backed, local-fallback â€” see lib/preferences.ts) ---
+
+export async function getUserPreferences(userId: number) {
+  const db = await getDb(); if (!db) return { userId, ...DEFAULT_PREFERENCES };
+  const result = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);
+  return result[0] ?? { userId, ...DEFAULT_PREFERENCES };
+}
+
+export async function upsertUserPreferences(userId: number, patch: Partial<InsertUserPreferences>) {
+  const db = await getDb(); if (!db) throw new Error("Database not available");
+  const existing = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);
+  if (existing[0]) {
+    await db.update(userPreferences).set(patch).where(eq(userPreferences.userId, userId));
+  } else {
+    await db.insert(userPreferences).values({ userId, ...DEFAULT_PREFERENCES, ...patch });
+  }
+  return getUserPreferences(userId);
+}
+
+// --- Push tokens (Tier 3 #12) -----------------------------------------------
+
+/**
+ * Upserts by token (not userId â€” a device can only ever belong to one
+ * user's push registration at a time). Re-registering an existing token
+ * under a different user (device re-installed, different account signed
+ * in) reassigns it rather than creating a duplicate row, since `token` is
+ * unique in the schema.
+ */
+export async function registerPushToken(userId: number, token: string, platform: "ios" | "android" | "web") {
+  const db = await getDb(); if (!db) return;
+  await db.insert(pushTokens).values({ userId, token, platform }).onDuplicateKeyUpdate({ set: { userId, platform, updatedAt: new Date() } });
+}
+
+export async function unregisterPushToken(userId: number, token: string) {
+  const db = await getDb(); if (!db) return;
+  await db.delete(pushTokens).where(and(eq(pushTokens.userId, userId), eq(pushTokens.token, token)));
+}
+
+/** Used by the scheduled push job to prune a token Expo's receipt API reports as no longer valid (app uninstalled, etc). Deletes by token value globally â€” deliberately not scoped by userId, since the job discovers invalid tokens from Expo's response, not from a user-initiated action. */
+export async function deletePushTokenByValue(token: string) {
+  const db = await getDb(); if (!db) return;
+  await db.delete(pushTokens).where(eq(pushTokens.token, token));
+}
+
+/**
+ * Raw candidate data for the scheduled push job â€” every token paired with
+ * its owner's timezone and ritual-hour preferences. Deliberately returns
+ * everything and lets server/pushSchedule.ts's pure `selectDuePushes()`
+ * decide who's actually due right now â€” keeping the "what does 8am local
+ * mean for this user" timezone math out of the data-access layer, matching
+ * this project's established pattern (critical-cascade.ts, commitment-sync.ts).
+ */
+export async function getPushCandidates() {
+  const db = await getDb(); if (!db) return [];
+  return db
+    .select({
+      tokenId: pushTokens.id,
+      userId: pushTokens.userId,
+      token: pushTokens.token,
+      lastBriefingSentAt: pushTokens.lastBriefingSentAt,
+      lastReviewSentAt: pushTokens.lastReviewSentAt,
+      timezone: users.timezone,
+      briefingHour: userPreferences.briefingHour,
+      reviewHour: userPreferences.reviewHour,
+      notificationsEnabled: userPreferences.notificationsEnabled,
+    })
+    .from(pushTokens)
+    .innerJoin(users, eq(users.id, pushTokens.userId))
+    .leftJoin(userPreferences, eq(userPreferences.userId, pushTokens.userId));
+}
+
+export async function markBriefingSent(tokenId: number, at: Date) {
+  const db = await getDb(); if (!db) return;
+  await db.update(pushTokens).set({ lastBriefingSentAt: at }).where(eq(pushTokens.id, tokenId));
+}
+
+export async function markReviewSent(tokenId: number, at: Date) {
+  const db = await getDb(); if (!db) return;
+  await db.update(pushTokens).set({ lastReviewSentAt: at }).where(eq(pushTokens.id, tokenId));
+}
+
+
+
+====================================================
+== server/rateLimit.ts
+====================================================
+
+// Tier 1 #2 â€” rate limiting on mutations and the LLM-backed quotes endpoint.
+//
+// Deliberately does NOT touch `_core/*` (platform-managed, per
+// FIXES-LOG.md / MERGE-NOTES.md convention) â€” this composes on top of the
+// existing `protectedProcedure` via tRPC's standard `.use(middleware)`
+// chaining, which any procedure builder supports regardless of what's
+// inside it.
+//
+// KNOWN LIMITATION: this is an in-memory, single-process fixed-window
+// limiter. It's correct and sufficient for a single server instance; it is
+// NOT correct behind multiple instances/load balancing, since each process
+// has its own counters. If/when this deploys behind more than one instance,
+// swap the Map below for a shared store (Redis INCR + EXPIRE is the
+// standard pattern) â€” the `rateLimited()` call sites in routers.ts don't
+// need to change, only this file's internals.
+
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure } from "./_core/trpc";
+import { log } from "./logger";
+
+type Bucket = { count: number; resetAt: number };
+const buckets = new Map<string, Bucket>();
+
+// Periodic cleanup so the map doesn't grow unbounded across long-lived
+// server processes with many distinct users.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of buckets) if (now >= bucket.resetAt) buckets.delete(key);
+}, 5 * 60 * 1000);
+
+/**
+ * Wraps `protectedProcedure` with a per-user, per-`key` fixed-window rate
+ * limit. Usage: `rateLimited("quotes.generate", 5, 60_000).input(...).mutation(...)`
+ * â€” reads exactly like a normal procedure declaration.
+ */
+export function rateLimited(key: string, limit: number, windowMs: number) {
+  return protectedProcedure.use(async ({ ctx, next }) => {
+    const bucketKey = `${key}:${ctx.user.id}`;
+    const now = Date.now();
+    const bucket = buckets.get(bucketKey);
+    if (!bucket || now >= bucket.resetAt) {
+      buckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
+    } else {
+      bucket.count += 1;
+      if (bucket.count > limit) {
+        const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
+        log({ event: "rate_limit.exceeded", level: "warn", userId: ctx.user.id, key, count: bucket.count, limit });
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Slow down a little â€” try again in ${retryAfterSeconds}s.` });
+      }
+    }
+    return next();
+  });
+}
+
+
+
+====================================================
+== server/logger.ts
+====================================================
+
+// Tier 2 #8 â€” structured logging on sync/scheduling/escalation paths.
+//
+// Before this, nothing anywhere logged a metric, error, or trace. If a
+// checkpoint failed to escalate, or a sync retry kept failing, the only way
+// to know was a user complaint â€” for a product whose entire pitch is
+// "trust that Eagle didn't drop this," that's the wrong failure mode.
+//
+// Deliberately minimal: one function, structured JSON lines to stdout. This
+// is NOT a logging platform integration (Datadog/Sentry/CloudWatch/etc.) â€”
+// it's the seam those integrations plug into. Swap the body of `log()` for
+// a real sink later; every call site in this codebase stays the same.
+
+type LogLevel = "info" | "warn" | "error";
+
+type LogEvent = {
+  event: string;
+  level: LogLevel;
+  userId?: number;
+  commitmentId?: number;
+  checkpointId?: number;
+  message?: string;
+  [key: string]: unknown;
+};
+
+export function log({ event, level, ...fields }: LogEvent) {
+  const line = { timestamp: new Date().toISOString(), event, level, ...fields };
+  const serialized = JSON.stringify(line);
+  if (level === "error") console.error(serialized);
+  else if (level === "warn") console.warn(serialized);
+  else console.log(serialized);
+}
+
+
+
+====================================================
+== drizzle/schema.ts
+====================================================
+
+// MERGED â€” see MERGE-NOTES.md for the reconciliation decisions:
+//  - criticalDeadline column (from c_next_sequence): an explicit deadline
+//    field, decoupled from timeStart/timeEnd, since "before Y" is not
+//    necessarily the commitment's own scheduled time.
+//  - criticalCheckpoints.status enum (from a_section7), not two booleans
+//    (c_next_sequence's acknowledged/escalated flags) â€” a single status
+//    field can't represent an invalid combination and matches the state
+//    machine in lib/critical-cascade.ts.
+//  - stage enum uses "three_hours" (c_next_sequence's naming), since that's
+//    what the natural-language parser and both UIs' capture flow reference.
+//  - userPreferences.shareTheme defaults to "Signal" (c_next_sequence),
+//    matching the real theme names in dashboard.tsx (a_section7 guessed
+//    "classic", which isn't one of the app's actual options).
+
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+
+export const users = mysqlTable("users", {
+  id: int("id").autoincrement().primaryKey(),
+  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  name: text("name"),
+  // Tier 2 #5 â€” the SRS (FR-A2/FR-A3) always required these; they were
+  // never actually added. Without a server-known timezone, there's no
+  // correct way to compute "8am local" for a scheduled push-delivery job
+  // (a known P1 gap) â€” the app currently only ever infers time from the
+  // device's own clock. IANA zone name (e.g. "Africa/Kampala"), not a raw
+  // UTC offset, since offsets shift with DST and a name is what every
+  // scheduling library actually wants.
+  timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+  language: varchar("language", { length: 8 }).default("en").notNull(),
+  email: varchar("email", { length: 320 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+});
+
+export const commitments = mysqlTable("commitments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  category: varchar("category", { length: 64 }).notNull(),
+  scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  timeStart: varchar("timeStart", { length: 5 }).notNull(),
+  timeEnd: varchar("timeEnd", { length: 5 }).notNull(),
+  priority: mysqlEnum("priority", ["high", "medium", "low"]).default("medium").notNull(),
+  status: mysqlEnum("status", ["active", "completed", "rescheduled", "missed"]).default("active").notNull(),
+  riskState: mysqlEnum("riskState", ["stable", "at_risk", "rescued", "missed"]).default("stable").notNull(),
+  critical: boolean("critical").default(false).notNull(),
+  // The deadline the two critical checkpoints (FR-G2) are computed from. Kept
+  // separate from timeStart/timeEnd since "before Y" is not necessarily the
+  // same as the commitment's own scheduled window.
+  criticalDeadline: timestamp("criticalDeadline"),
+  meetingProvider: mysqlEnum("meetingProvider", ["zoom", "meet"]),
+  meetingUrl: varchar("meetingUrl", { length: 500 }),
+  // Per-commitment override for the five-minute meeting warning. Null means
+  // "use the global Settings preference"; true/false is an explicit override.
+  warningMuted: boolean("warningMuted"),
+  // Tier 2 #6 â€” was a hard delete (Tier 1 #3); a mis-tap on "Delete" or an
+  // accidental capture had no recovery path at all. NULL = active row;
+  // set = soft-deleted, kept for audit/undo rather than gone forever.
+  // Reads throughout db.ts now filter `isNull(commitments.deletedAt)`.
+  deletedAt: timestamp("deletedAt"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// Exactly two rows are created per critical commitment (FR-G2): one for
+// "day_before", one for "three_hours". Kept as its own table (rather than
+// flattening onto commitments) so status/acknowledgement state and any
+// future stage additions (FR-G2b) don't require another commitments
+// migration.
+export const criticalCheckpoints = mysqlTable("criticalCheckpoints", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  commitmentId: int("commitmentId").notNull(),
+  stage: mysqlEnum("stage", ["day_before", "three_hours"]).notNull(),
+  dueAt: timestamp("dueAt").notNull(),
+  status: mysqlEnum("status", ["pending", "acknowledged", "escalated", "missed"]).default("pending").notNull(),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  // Tier 2 #6 â€” used specifically by clearCriticalCheckpoints (removing a
+  // critical flag), so there's a record of what a cascade looked like when
+  // it was cancelled. NOT used by replaceCriticalCheckpoints (a deadline
+  // change) â€” that's a genuine replace, not a user-facing delete, so the
+  // stale rows there are still hard-deleted; keeping them as "soft
+  // deleted" would just be clutter with no audit value.
+  deletedAt: timestamp("deletedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// One row per user. Centralizes what was previously local-only Settings
+// state (ritual times, notification/voice/chime toggles, share theme) so it
+// survives a reinstall and follows the user across devices.
+export const userPreferences = mysqlTable("userPreferences", {
+  userId: int("userId").primaryKey(),
+  briefingHour: int("briefingHour").default(8).notNull(),
+  reviewHour: int("reviewHour").default(22).notNull(),
+  notificationsEnabled: boolean("notificationsEnabled").default(true).notNull(),
+  voiceEnabled: boolean("voiceEnabled").default(true).notNull(),
+  meetingChimeMuted: boolean("meetingChimeMuted").default(false).notNull(),
+  earlyWarningMuted: boolean("earlyWarningMuted").default(false).notNull(),
+  shareTheme: varchar("shareTheme", { length: 32 }).default("Signal").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// Tier 3 #12 â€” production push delivery. The client already calls
+// `Notifications.getExpoPushTokenAsync()` (lib/native-services.ts) but
+// nothing ever sent that token to the server or stored it â€” this table and
+// the endpoints in routers.ts close that gap. One row per device (not
+// folded onto `users`) so a user signed in on two phones gets both, and a
+// stale/uninstalled device's token can be pruned without touching the
+// other. `lastSentAt` lets the scheduled job (server/pushSchedule.ts) avoid
+// double-sending within the same local hour if it runs more than once.
+export const pushTokens = mysqlTable("pushTokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  platform: mysqlEnum("platform", ["ios", "android", "web"]).notNull(),
+  lastBriefingSentAt: timestamp("lastBriefingSentAt"),
+  lastReviewSentAt: timestamp("lastReviewSentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export const weeklySnapshots = mysqlTable("weeklySnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  snapshotDate: varchar("snapshotDate", { length: 10 }).notNull(),
+  category: varchar("category", { length: 64 }).notNull(),
+  priority: varchar("priority", { length: 16 }).notNull().default("all"),
+  completed: int("completed").notNull().default(0),
+  closed: int("closed").notNull().default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Commitment = typeof commitments.$inferSelect;
+export type InsertCommitment = typeof commitments.$inferInsert;
+export type WeeklySnapshot = typeof weeklySnapshots.$inferSelect;
+export type InsertWeeklySnapshot = typeof weeklySnapshots.$inferInsert;
+export type CriticalCheckpoint = typeof criticalCheckpoints.$inferSelect;
+export type InsertCriticalCheckpoint = typeof criticalCheckpoints.$inferInsert;
+export type UserPreferences = typeof userPreferences.$inferSelect;
+export type InsertUserPreferences = typeof userPreferences.$inferInsert;
+export type PushToken = typeof pushTokens.$inferSelect;
+export type InsertPushToken = typeof pushTokens.$inferInsert;
+
+
+
+====================================================
+== lib/trpc.ts
+====================================================
+
+import { createTRPCReact } from "@trpc/react-query";
+import { httpBatchLink } from "@trpc/client";
+import superjson from "superjson";
+import type { AppRouter } from "@/server/routers";
+import { getApiBaseUrl } from "@/constants/oauth";
+import * as Auth from "@/lib/_core/auth";
+
+/**
+ * tRPC React client for type-safe API calls.
+ *
+ * IMPORTANT (tRPC v11): The `transformer` must be inside `httpBatchLink`,
+ * NOT at the root createClient level. This ensures client and server
+ * use the same serialization format (superjson).
+ */
+export const trpc = createTRPCReact<AppRouter>();
+
+/**
+ * Creates the tRPC client with proper configuration.
+ * Call this once in your app's root layout.
+ */
+export function createTRPCClient() {
+  return trpc.createClient({
+    links: [
+      httpBatchLink({
+        url: `${getApiBaseUrl()}/api/trpc`,
+        // tRPC v11: transformer MUST be inside httpBatchLink, not at root
+        transformer: superjson,
+        async headers() {
+          const token = await Auth.getSessionToken();
+          return token ? { Authorization: `Bearer ${token}` } : {};
+        },
+        // Custom fetch to include credentials for cookie-based auth
+        fetch(url, options) {
+          return fetch(url, {
+            ...options,
+            credentials: "include",
+          });
+        },
+      }),
+    ],
+  });
+}
+
+
+
+====================================================
+== lib/_core/auth.ts
+====================================================
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SESSION_TOKEN_KEY, getRedirectUri } from "@/constants/oauth";
+
+/**
+ * NOT part of any of the five exports this project was built from -
+ * trpc.ts referenced lib/_core/auth.ts (getSessionToken) but it was never
+ * actually provided anywhere, confirmed by checking every upload.
+ *
+ * getSessionToken/setSessionToken/clearSessionToken are safe and correct
+ * regardless of the real OAuth contract - plain AsyncStorage read/write.
+ *
+ * completeOAuthFromUrl GUESSES the callback URL shape (a `token` query
+ * param). This is the one part that needs verifying against the real
+ * Manus OAuth server's actual callback response - if sign-in opens the
+ * browser fine but never completes, this is almost certainly why.
+ * On web, the backend's cookie-based session may work on its own even if
+ * this token flow is wrong, since trpc.ts also sends credentials:
+ * "include" independently of this file.
+ */
+
+export async function getSessionToken(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(SESSION_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function setSessionToken(token: string): Promise<void> {
+  await AsyncStorage.setItem(SESSION_TOKEN_KEY, token);
+}
+
+export async function clearSessionToken(): Promise<void> {
+  await AsyncStorage.removeItem(SESSION_TOKEN_KEY);
+}
+
+/** Best-effort - see file header. */
+export async function completeOAuthFromUrl(url: string): Promise<boolean> {
+  try {
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get("token");
+    if (!token) return false;
+    await setSessionToken(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getExpectedRedirectUri(): string {
+  return getRedirectUri();
+}
+
+
+
+====================================================
+== hooks/use-auth.ts
+====================================================
+
+import { useCallback } from "react";
+import { trpc } from "@/lib/trpc";
+import { clearSessionToken } from "@/lib/_core/auth";
+
+export function useAuth() {
+  const utils = trpc.useUtils();
+  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
+  const logoutMutation = trpc.auth.logout.useMutation();
+
+  const logout = useCallback(async () => {
+    await clearSessionToken();
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // Already logged out locally regardless of whether the server call succeeds.
+    }
+    utils.auth.me.setData(undefined, null);
+    await meQuery.refetch();
+  }, [logoutMutation, meQuery, utils]);
+
+  return {
+    user: meQuery.data ?? null,
+    isAuthenticated: Boolean(meQuery.data),
+    loading: meQuery.isLoading,
+    logout,
+  };
+}
+
+
+
+====================================================
+== constants/oauth.ts
+====================================================
+
+import * as Linking from "expo-linking";
+import * as ReactNative from "react-native";
+
+// Extract scheme from bundle ID (last segment timestamp, prefixed with "manus")
+// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
+const bundleId = "com.app.deaglehub";
+const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
+const schemeFromBundleId = `manus${timestamp}`;
+
+const env = {
+  portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
+  server: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? "",
+  appId: process.env.EXPO_PUBLIC_APP_ID ?? "",
+  ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
+  ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
+  apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+  deepLinkScheme: schemeFromBundleId,
+};
+
+export const OAUTH_PORTAL_URL = env.portal;
+export const OAUTH_SERVER_URL = env.server;
+export const APP_ID = env.appId;
+export const OWNER_OPEN_ID = env.ownerId;
+export const OWNER_NAME = env.ownerName;
+export const API_BASE_URL = env.apiBaseUrl;
+
+/**
+ * Get the API base URL, deriving from current hostname if not set.
+ * Metro runs on 8081, API server runs on 3000.
+ * URL pattern: https://PORT-sandboxid.region.domain
+ */
+export function getApiBaseUrl(): string {
+  // If API_BASE_URL is set, use it
+  if (API_BASE_URL) {
+    return API_BASE_URL.replace(/\/$/, "");
+  }
+
+  // On web, derive from current hostname by replacing port 8081 with 3000
+  if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
+    const { protocol, hostname } = window.location;
+    // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
+    const apiHostname = hostname.replace(/^8081-/, "3000-");
+    if (apiHostname !== hostname) {
+      return `${protocol}//${apiHostname}`;
+    }
+  }
+
+  // Fallback to empty (will use relative URL)
+  return "";
+}
+
+export const SESSION_TOKEN_KEY = "app_session_token";
+export const USER_INFO_KEY = "manus-runtime-user-info";
+
+const encodeState = (value: string) => {
+  if (typeof globalThis.btoa === "function") {
+    return globalThis.btoa(value);
+  }
+  const BufferImpl = (globalThis as Record<string, any>).Buffer;
+  if (BufferImpl) {
+    return BufferImpl.from(value, "utf-8").toString("base64");
+  }
+  return value;
+};
+
+/**
+ * Get the redirect URI for OAuth callback.
+ * - Web: uses API server callback endpoint
+ * - Native: uses deep link scheme
+ */
+export const getRedirectUri = () => {
+  if (ReactNative.Platform.OS === "web") {
+    return `${getApiBaseUrl()}/api/oauth/callback`;
+  } else {
+    return Linking.createURL("/oauth/callback", {
+      scheme: env.deepLinkScheme,
+    });
+  }
+};
+
+export const getLoginUrl = () => {
+  const redirectUri = getRedirectUri();
+  const state = encodeState(redirectUri);
+
+  const url = new URL(`${OAUTH_PORTAL_URL}/app-auth`);
+  url.searchParams.set("appId", APP_ID);
+  url.searchParams.set("redirectUri", redirectUri);
+  url.searchParams.set("state", state);
+  url.searchParams.set("type", "signIn");
+
+  return url.toString();
+};
+
+/**
+ * Start OAuth login flow.
+ *
+ * On native platforms (iOS/Android), open the system browser directly so
+ * the OAuth callback returns via deep link to the app.
+ *
+ * On web, this simply redirects to the login URL.
+ *
+ * @returns Always null, the callback is handled via deep link.
+ */
+export async function startOAuthLogin(): Promise<string | null> {
+  const loginUrl = getLoginUrl();
+
+  if (ReactNative.Platform.OS === "web") {
+    // On web, just redirect
+    if (typeof window !== "undefined") {
+      window.location.href = loginUrl;
+    }
+    return null;
+  }
+
+  const supported = await Linking.canOpenURL(loginUrl);
+  if (!supported) {
+    console.warn("[OAuth] Cannot open login URL: URL scheme not supported");
+    // å¯è€ƒè™‘æŠ›å‡ºé”™è¯¯æˆ–è¿”å›žé”™è¯¯çŠ¶æ€ï¼Œè®©è°ƒç”¨æ–¹å¤„ç†
+    return null;
+  }
+
+  try {
+    await Linking.openURL(loginUrl);
+  } catch (error) {
+    console.error("[OAuth] Failed to open login URL:", error);
+    // å¯è€ƒè™‘æŠ›å‡ºé”™è¯¯è®©è°ƒç”¨æ–¹å¤„ç†
+  }
+
+  // The OAuth callback will reopen the app via deep link.
+  return null;
+}
+
+
+
+====================================================
+== app/(tabs)/index.tsx
+====================================================
+
+// MERGED (round 2) â€” base is the "d_full" build's index.tsx (voice capture,
+// meeting integration, the natural-language "don't let me forget" capture +
+// ambiguous-deadline prompt, real criticalDeadline/warningMuted cloud sync).
+// Grafted in from the "e_complete" build: the FR-G3 acknowledge/escalate/
+// expire checkpoint state machine, the 30s escalation tick (reusing the
+// existing `now` ticker rather than adding a second timer), the cascade
+// status badge on Today, and the per-checkpoint acknowledge list in the
+// commitment detail sheet. See MERGE-NOTES.md for the full breakdown,
+// including one real, honestly-flagged gap: checkpoint acknowledgments are
+// not yet synced to the server, because the client only tracks checkpoints
+// by commitment id, not by their own row id in the criticalCheckpoints
+// table â€” search "known gap" in this file and in MERGE-NOTES.md.
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Modal,
+  Platform,
+  Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { extractMeetingLink, normalizeMeetingUrl, parseCommitment, validateMeetingUrl } from "@/lib/commitment-parser";
+import { cloudRowToCommitment, mergeCommitments } from "@/lib/commitment-sync";
+import {
+  acknowledgeCheckpoint,
+  buildCriticalCheckpoints,
+  cascadeStatus,
+  escalateCheckpoint,
+  expireUnacknowledged,
+  parseCriticalCommitment,
+  parseDeadlinePhrase,
+  shouldEscalate,
+  type Checkpoint,
+} from "@/lib/critical-cascade";
+import { cancelCriticalCascade, openMeeting, registerForNotifications, scheduleCommitmentMeeting, scheduleCriticalCascade, speakCheckpointEscalation, speakEagle } from "@/lib/native-services";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
+import { recordTodaySnapshot } from "@/lib/weekly-snapshots";
+
+type CommitmentStatus = "active" | "completed" | "rescheduled" | "missed";
+type RiskState = "stable" | "at_risk" | "rescued" | "missed";
+type Priority = "high" | "medium" | "low";
+
+type Commitment = {
+  id: string;
+  title: string;
+  category: string;
+  // Tier 3 #11 â€” was missing entirely; see commitment-parser.ts's
+  // ParsedCommitment for the full story of what this fixes.
+  scheduledDate: string;
+  timeStart: string;
+  timeEnd: string;
+  priority: Priority;
+  status: CommitmentStatus;
+  riskState: RiskState;
+  critical?: boolean;
+  criticalDeadline?: string;
+  meetingProvider?: "zoom" | "meet";
+  meetingUrl?: string;
+  warningMuted?: boolean;
+  // Set when a cloud create/update call fails, so the UI can show the user
+  // this item hasn't actually synced instead of failing silently.
+  syncFailed?: boolean;
+};
+
+const STORAGE_KEY = "deagle-commitments-v1";
+const CHECKPOINTS_STORAGE_KEY = "deagle-checkpoints-v1";
+const ONBOARDING_KEY = "deagle-onboarded-v1";
+// Tier 3 #9 â€” kept to four short slides matching the product's own
+// "silence is a feature" instinct: explain the mechanism, not every screen.
+const ONBOARDING_SLIDES = [
+  { icon: "sparkles-outline" as const, title: "Meet Eagle", body: "Eagle holds your commitments so you don't have to carry them in your head. Capture in plain language â€” Eagle handles the rest." },
+  { icon: "layers-outline" as const, title: "Six a day, on purpose", body: "Only six active commitments at a time. Add a seventh and Eagle suggests the lowest-risk one to move to tomorrow â€” not a decision you have to make yourself." },
+  { icon: "flag-outline" as const, title: "Don't let me forget", body: "Flag something critical and Eagle sets two checkpoints â€” one day before, three hours before â€” and escalates with a voice alert if either goes unacknowledged." },
+  { icon: "moon-outline" as const, title: "One nightly ritual", body: "Anything unmarked by midnight becomes missed, and Eagle asks if you'd like to carry it to tomorrow. That's the one moment worth not skipping." },
+];
+const today = new Date();
+// NOTE: `today` is computed once at module load, not per-render â€” a
+// pre-existing characteristic of this file, not something Tier 3 #11
+// introduces. A session left open across midnight won't roll this over.
+// Flagged as a small follow-up in FIXES-LOG.md rather than fixed here,
+// since it's a separate concern from the missing date-scoping this fix
+// addresses.
+const todayKey = today.toISOString().slice(0, 10);
+const dateLabel = today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+const initialCommitments: Commitment[] = [
+  { id: "1", title: "Send revised proposal to Maya", category: "Work", scheduledDate: todayKey, timeStart: "09:30", timeEnd: "10:00", priority: "high", status: "active", riskState: "stable" },
+  { id: "2", title: "Pick up prescription", category: "Health", scheduledDate: todayKey, timeStart: "12:15", timeEnd: "12:45", priority: "medium", status: "active", riskState: "stable" },
+  { id: "3", title: "Call Dad about Sunday", category: "People", scheduledDate: todayKey, timeStart: "18:30", timeEnd: "19:00", priority: "high", status: "active", riskState: "at_risk", critical: true },
+];
+
+function riskCopy(risk: RiskState) {
+  if (risk === "at_risk") return "At risk";
+  if (risk === "rescued") return "Rescued";
+  if (risk === "missed") return "Missed";
+  return "Stable";
+}
+
+// Label + color for a critical commitment's checkpoint cascade, shown on Today and in the quick review sheet.
+function cascadeCopy(status: ReturnType<typeof cascadeStatus>) {
+  if (status === "clear") return { label: "Both checkpoints acknowledged", color: "#0B6E69" };
+  if (status === "missed") return { label: "A checkpoint went unacknowledged", color: "#E87561" };
+  if (status === "open") return { label: "Checkpoint pending", color: "#F4B942" };
+  return { label: "", color: "#E87561" };
+}
+
+export default function HomeScreen() {
+  const colors = useColors();
+  const { isAuthenticated } = useAuth();
+  const cloudCommitments = trpc.commitments.list.useQuery(undefined, { enabled: isAuthenticated });
+  const createCloudCommitment = trpc.commitments.create.useMutation();
+  const updateCloudCommitment = trpc.commitments.update.useMutation();
+  const deleteCloudCommitment = trpc.commitments.delete.useMutation();
+  const updateLocale = trpc.auth.updateLocale.useMutation();
+  const registerPushToken = trpc.notifications.registerToken.useMutation();
+
+  // Tier 3 #12 â€” registerForNotifications() (lib/native-services.ts) was
+  // defined but never actually called anywhere in this file; the whole
+  // push-token flow was dead code. Fire-and-forget for the same reason as
+  // the locale-report effect above: a failure here just means server-side
+  // push stays unavailable for this device until next successful launch,
+  // never blocking the user. Local notifications (briefing/review/cascade
+  // scheduling elsewhere in this file) work independently of this.
+  useEffect(() => {
+    if (!isAuthenticated || Platform.OS === "web") return;
+    registerForNotifications().then((token) => {
+      if (token) registerPushToken.mutate({ token, platform: Platform.OS as "ios" | "android" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // Tier 2 #5 â€” reports the device's detected IANA timezone once per
+  // session (not on every render/tick) so the server can eventually know
+  // "8am local" for this user without relying solely on the device's own
+  // clock at notification-scheduling time. Deliberately fire-and-forget:
+  // a failure here just means the server's stored timezone stays stale
+  // until the next successful launch, which is a fine degradation â€” it
+  // never blocks anything the user is doing.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timezone) updateLocale.mutate({ timezone });
+    } catch { /* Intl unavailable on some old engines â€” non-fatal, just skip. */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+  const upsertCloudSnapshot = trpc.snapshots.upsert.useMutation();
+  const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
+  const [capture, setCapture] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [meetingProvider, setMeetingProvider] = useState<"zoom" | "meet">("zoom");
+  const [editMeetingUrl, setEditMeetingUrl] = useState("");
+  const [editMeetingProvider, setEditMeetingProvider] = useState<"zoom" | "meet">("zoom");
+  const [meetingError, setMeetingError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [chimeMuted, setChimeMuted] = useState(false);
+  const [voiceToast, setVoiceToast] = useState("");
+  const [syncNotice, setSyncNotice] = useState("");
+  const [previousVoiceLink, setPreviousVoiceLink] = useState<{ provider: "zoom" | "meet"; url: string } | null>(null);
+  const [editingVoiceLink, setEditingVoiceLink] = useState(false);
+  const [meetingFilter, setMeetingFilter] = useState<"all" | "zoom" | "meet">("all");
+  const [editWarningMuted, setEditWarningMuted] = useState(false);
+  const [showCriticalPrompt, setShowCriticalPrompt] = useState(false);
+  const [criticalDeadlineInput, setCriticalDeadlineInput] = useState("");
+  const [criticalAmbiguous, setCriticalAmbiguous] = useState(false);
+  const [criticalError, setCriticalError] = useState("");
+  const [pendingCriticalTitle, setPendingCriticalTitle] = useState<string | null>(null);
+  const criticalNotificationIds = useRef<Record<string, string[]>>({});
+  // commitment id -> its exactly-two checkpoints (FR-G2/FR-G3 state machine)
+  const [checkpoints, setCheckpoints] = useState<Record<string, Checkpoint[]>>({});
+  // avoids re-speaking the same checkpoint escalation on every 30s tick
+  const escalatedRef = useRef<Set<string>>(new Set());
+  const checkpointUpdateCloud = trpc.checkpoints.update.useMutation();
+  const [showVoiceEditor, setShowVoiceEditor] = useState(false);
+  const [voiceEditUrl, setVoiceEditUrl] = useState("");
+  const [voiceEditProvider, setVoiceEditProvider] = useState<"zoom" | "meet">("zoom");
+  const chimeMeetingRef = useRef<string | null>(null);
+  const [showReview, setShowReview] = useState(false);
+  const [showRescue, setShowRescue] = useState(false);
+  const [selected, setSelected] = useState<Commitment | null>(null);
+  // Tap-once-to-arm, tap-again-to-confirm delete â€” avoids a separate modal
+  // for a destructive action while still requiring a deliberate second tap.
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  // Tier 3 #9 â€” a new user previously hit the 6-limit, the cascade, and
+  // risk states with zero explanation. Shown once, gated on a local flag;
+  // "Show me again" in Settings can reset it (see settings.tsx).
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then((seen) => { if (!seen) setShowOnboarding(true); });
+  }, []);
+  const finishOnboarding = () => { AsyncStorage.setItem(ONBOARDING_KEY, "1"); setShowOnboarding(false); setOnboardingStep(0); };
+  const pulse = useMemo(() => new Animated.Value(1), []);
+
+  useEffect(() => {
+    if (!isListening) { pulse.stopAnimation(); pulse.setValue(1); return; }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.14, duration: 650, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 650, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [isListening, pulse]);
+
+  useSpeechRecognitionEvent("result", (event) => {
+    const transcript = event.results?.[0]?.transcript ?? "";
+    if (transcript) { setCapture(transcript); const spokenLink = extractMeetingLink(transcript); if (spokenLink) { setPreviousVoiceLink(meetingUrl.trim() ? { provider: meetingProvider, url: meetingUrl } : null); setMeetingProvider(spokenLink.provider); setMeetingUrl(spokenLink.url); setMeetingError(""); setVoiceToast(`${spokenLink.provider === "zoom" ? "Zoom" : "Google Meet"} link detected`); setTimeout(() => setVoiceToast(""), 3600); } }
+    if (event.isFinal) setIsListening(false);
+  });
+  useSpeechRecognitionEvent("error", () => setIsListening(false));
+
+  const toggleVoiceCapture = async () => {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+      setIsListening(false);
+      return;
+    }
+    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permission.granted) return;
+    setIsListening(true);
+    ExpoSpeechRecognitionModule.start({ lang: "en-US", interimResults: true, continuous: false });
+  };
+
+  useEffect(() => { setEditMeetingUrl(selected?.meetingUrl ?? ""); setEditMeetingProvider(selected?.meetingProvider ?? "zoom"); setEditWarningMuted(Boolean(selected?.warningMuted)); setMeetingError(""); }, [selected]);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
+  useEffect(() => { AsyncStorage.getItem("deagle-meeting-chime-muted").then((value) => setChimeMuted(value === "true")); }, []);
+  useEffect(() => {
+    if (isAuthenticated && cloudCommitments.data !== undefined) {
+      setCommitments((current) => mergeCommitments(current, cloudCommitments.data, suppressedIdsRef.current));
+    }
+  }, [isAuthenticated, cloudCommitments.data]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
+      if (stored) setCommitments(JSON.parse(stored));
+    });
+  }, []);
+
+  // Hydrates locally-scheduled checkpoints so a cascade started before the app
+  // was last closed keeps its acknowledge/escalate state across restarts.
+  useEffect(() => {
+    AsyncStorage.getItem(CHECKPOINTS_STORAGE_KEY).then((stored) => {
+      if (stored) { try { setCheckpoints(JSON.parse(stored)); } catch { /* ignore malformed cache */ } }
+    });
+  }, []);
+  useEffect(() => { AsyncStorage.setItem(CHECKPOINTS_STORAGE_KEY, JSON.stringify(checkpoints)); }, [checkpoints]);
+
+  // FR-G3: every 30s (reusing the same tick that drives `now` for meeting
+  // countdowns) escalate any pending checkpoint past its due time â€” voice
+  // alert, once per checkpoint via escalatedRef â€” and expire any checkpoint
+  // still open once the commitment's own deadline has passed, so the Nightly
+  // Review can show the cascade as missed rather than silently open forever.
+  useEffect(() => {
+    setCheckpoints((all) => {
+      let changed = false;
+      const next: Record<string, Checkpoint[]> = {};
+      for (const [id, list] of Object.entries(all)) {
+        const commitment = commitments.find((item) => item.id === id);
+        const deadline = commitment?.criticalDeadline;
+        next[id] = list.map((checkpoint) => {
+          if (shouldEscalate(checkpoint, now)) {
+            const key = `${id}:${checkpoint.stage}`;
+            if (!escalatedRef.current.has(key)) {
+              escalatedRef.current.add(key);
+              speakCheckpointEscalation(commitment?.title ?? "A critical commitment", checkpoint.stage);
+              // Deliberately not synced to the server here: `id` is the
+              // *commitment's* id, not the checkpoint row's own id in the
+              // criticalCheckpoints table (the client doesn't track that
+              // separately yet â€” see MERGE-NOTES.md "known gap"). Firing
+              // checkpointUpdateCloud with the wrong id risks silently
+              // updating an unrelated row. Local state + the voice alert
+              // above are correct either way; cloud sync of this specific
+              // transition is the tracked follow-up.
+            }
+            changed = true;
+            return escalateCheckpoint(checkpoint);
+          }
+          if (deadline) {
+            const expired = expireUnacknowledged(checkpoint, deadline, now);
+            if (expired !== checkpoint) { changed = true; return expired; }
+          }
+          return checkpoint;
+        });
+      }
+      return changed ? next : all;
+    });
+  }, [now, commitments, isAuthenticated]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(commitments));
+    const snapshotItems = commitments.map((item) => ({ status: item.status, category: item.category, priority: item.priority }));
+    recordTodaySnapshot(snapshotItems).catch(() => undefined);
+    if (isAuthenticated) { const date = new Date().toISOString().slice(0, 10); const categories = ["All", ...Array.from(new Set(snapshotItems.map((item) => item.category)))]; const priorities = ["all", "high", "medium", "low"]; categories.forEach((category) => priorities.forEach((priority) => { const group = snapshotItems.filter((item) => (category === "All" || item.category === category) && (priority === "all" || item.priority === priority)); const completed = group.filter((item) => item.status === "completed").length; const closed = group.filter((item) => item.status === "completed" || item.status === "missed").length; upsertCloudSnapshot.mutate({ snapshotDate: date, category, priority, completed, closed }); })); }
+  }, [commitments, isAuthenticated, upsertCloudSnapshot]);
+
+  const active = useMemo(() => commitments.filter((item) => item.scheduledDate === todayKey && (item.status === "active" || item.status === "rescheduled") && (meetingFilter === "all" || item.meetingProvider === meetingFilter)).sort((a, b) => a.timeStart.localeCompare(b.timeStart)), [commitments, meetingFilter]);
+  const completedCount = commitments.filter((item) => item.status === "completed").length;
+  const atRisk = active.find((item) => item.riskState === "at_risk");
+  const nextMeeting = useMemo(() => { const item = active.find((candidate) => { if (!candidate.meetingProvider || !candidate.meetingUrl) return false; const [hour, minute] = candidate.timeStart.split(":").map(Number); const target = new Date(); target.setHours(hour, minute, 0, 0); const diff = Math.ceil((target.getTime() - now) / 60000); return diff >= 0 && diff <= 60; }); if (!item) return null; const [hour, minute] = item.timeStart.split(":").map(Number); const target = new Date(); target.setHours(hour, minute, 0, 0); return { ...item, minutesUntil: Math.max(0, Math.ceil((target.getTime() - now) / 60000)) }; }, [active, now]);
+  useEffect(() => { if (!chimeMuted && nextMeeting?.minutesUntil === 0 && chimeMeetingRef.current !== nextMeeting.id) { chimeMeetingRef.current = nextMeeting.id; speakEagle("Your meeting is starting now."); } }, [nextMeeting, chimeMuted]);
+
+  const scheduleMeeting = async (provider: "zoom" | "meet") => { const globalMuted = (await AsyncStorage.getItem("deagle-early-warning-muted")) === "true"; if (selected) await scheduleCommitmentMeeting(selected.title, today.toISOString().slice(0, 10), selected.timeStart, provider, selected.meetingUrl, selected.warningMuted ?? globalMuted); };
+
+  // FIX (Tier 1 #1, part A): a newly-captured commitment's local id is a
+  // client-side timestamp (see lib/commitment-parser.ts), not the server's
+  // real autoincrement row id. Without remapping it once the create call
+  // succeeds, every later update() call for that commitment sends the
+  // timestamp as if it were the server's id â€” the WHERE clause matches zero
+  // rows, the update silently no-ops, and nothing ever reaches the server
+  // for the rest of that session. This closes that gap.
+  const remapCommitmentId = (oldId: string, newId: string) => {
+    setCommitments((items) => items.map((item) => (item.id === oldId ? { ...item, id: newId, syncFailed: false } : item)));
+    setCheckpoints((all) => { if (!(oldId in all)) return all; const { [oldId]: moved, ...rest } = all; return { ...rest, [newId]: moved }; });
+    const ids = criticalNotificationIds.current[oldId];
+    if (ids) { delete criticalNotificationIds.current[oldId]; criticalNotificationIds.current[newId] = ids; }
+  };
+
+  // FIX (Tier 1 #1, part B): every cloud mutation now has an explicit
+  // onSuccess/onError instead of firing silently. Failures flip
+  // `syncFailed` on the affected commitment (shown as a small badge on its
+  // card) and surface a toast, rather than looking identical to a
+  // successful save.
+  const markSyncFailed = (id: string, message: string) => {
+    setCommitments((items) => items.map((item) => (item.id === id ? { ...item, syncFailed: true } : item)));
+    setSyncNotice(message);
+    setTimeout(() => setSyncNotice(""), 4200);
+  };
+  const clearSyncFailed = (id: string) => setCommitments((items) => items.map((item) => (item.id === id ? { ...item, syncFailed: false } : item)));
+
+  // Tier 1 #3 â€” previously a mis-capture could never actually be removed,
+  // only reassigned a status. Tears down every piece of state a commitment
+  // can be referenced from: local list, checkpoints map, scheduled local
+  // notifications, and â€” if it made it to the server â€” the cloud row.
+  // Tier 3 #10 â€” ids removed locally this session, so a cloud refetch
+  // (which may not yet reflect an in-flight or failed delete) never
+  // silently resurrects them. See lib/commitment-sync.ts.
+  const suppressedIdsRef = useRef<Set<string>>(new Set());
+
+  const removeCommitment = (commitment: Commitment) => {
+    const ids = criticalNotificationIds.current[commitment.id];
+    if (ids) { cancelCriticalCascade(ids); delete criticalNotificationIds.current[commitment.id]; }
+    setCheckpoints((all) => { if (!(commitment.id in all)) return all; const copy = { ...all }; delete copy[commitment.id]; return copy; });
+    suppressedIdsRef.current.add(commitment.id);
+    setCommitments((items) => items.filter((item) => item.id !== commitment.id));
+    if (isAuthenticated && /^\d+$/.test(commitment.id) && commitment.id.length < 13) {
+      deleteCloudCommitment.mutate({ id: Number(commitment.id) }, { onError: () => setSyncNotice("Removed here, but the cloud copy may still exist â€” worth checking when back online.") });
+    }
+    setSelected(null);
+  };
+
+  const update = (id: string, patch: Partial<Commitment>) => {
+    setCommitments((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+    if (isAuthenticated && /^\d+$/.test(id)) {
+      updateCloudCommitment.mutate(
+        { id: Number(id), status: patch.status, riskState: patch.riskState, critical: patch.critical, criticalDeadline: "criticalDeadline" in patch ? patch.criticalDeadline ?? null : undefined, meetingProvider: patch.meetingProvider, meetingUrl: patch.meetingUrl, warningMuted: "warningMuted" in patch ? patch.warningMuted ?? null : undefined },
+        { onSuccess: () => clearSyncFailed(id), onError: () => markSyncFailed(id, "Couldn't sync that change â€” Eagle will retry shortly.") }
+      );
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Retries any commitment currently marked syncFailed, piggybacking on the
+  // existing 30s tick rather than adding another timer. A commitment still
+  // on its client-timestamp id (never successfully created server-side)
+  // retries the create call; one with a real numeric id retries the update.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    commitments.filter((item) => item.syncFailed).forEach((item) => {
+      if (/^\d+$/.test(item.id) && item.id.length < 13) {
+        // Real server id (small autoincrement int, not a 13-digit ms timestamp) â€” retry update.
+        updateCloudCommitment.mutate(
+          { id: Number(item.id), status: item.status, riskState: item.riskState, critical: item.critical, criticalDeadline: item.criticalDeadline ?? null, meetingProvider: item.meetingProvider, meetingUrl: item.meetingUrl, warningMuted: item.warningMuted ?? null },
+          { onSuccess: () => clearSyncFailed(item.id), onError: () => undefined }
+        );
+      } else {
+        createCloudCommitment.mutate(
+          { title: item.title, category: item.category, scheduledDate: new Date().toISOString().slice(0, 10), timeStart: item.timeStart, timeEnd: item.timeEnd, priority: item.priority, status: item.status, riskState: item.riskState, critical: Boolean(item.critical), criticalDeadline: item.criticalDeadline, meetingProvider: item.meetingProvider, meetingUrl: item.meetingUrl },
+          { onSuccess: (serverId) => remapCommitmentId(item.id, String(serverId)), onError: () => undefined }
+        );
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, isAuthenticated]);
+
+  const commitCritical = (deadline: Date, titleOverride?: string) => {
+    // Named distinctly from the `checkpoints` state above â€” this is just the
+    // two rows for *this* commitment, not the whole id-keyed map.
+    const builtCheckpoints = buildCriticalCheckpoints(deadline);
+    const title = titleOverride ?? pendingCriticalTitle;
+    if (title !== null && title !== undefined) {
+      const parsed = parseCommitment(title);
+      const next: Commitment = { ...parsed, critical: true, criticalDeadline: deadline.toISOString() };
+      setCommitments((items) => [...items, next]);
+      if (isAuthenticated) createCloudCommitment.mutate(
+        { title: next.title, category: next.category, scheduledDate: new Date().toISOString().slice(0, 10), timeStart: next.timeStart, timeEnd: next.timeEnd, priority: next.priority, status: next.status, riskState: next.riskState, critical: true, criticalDeadline: deadline.toISOString() },
+        { onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)), onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet â€” Eagle will retry.") }
+      );
+      setCheckpoints((all) => ({ ...all, [next.id]: builtCheckpoints }));
+      scheduleCriticalCascade(next.id, next.title, builtCheckpoints).then((ids) => { criticalNotificationIds.current[next.id] = ids; });
+      setPendingCriticalTitle(null);
+    } else if (selected) {
+      update(selected.id, { critical: true, criticalDeadline: deadline.toISOString() });
+      setCheckpoints((all) => ({ ...all, [selected.id]: builtCheckpoints }));
+      scheduleCriticalCascade(selected.id, selected.title, builtCheckpoints).then((ids) => { criticalNotificationIds.current[selected.id] = ids; });
+      setSelected(null);
+    }
+    setShowCriticalPrompt(false);
+    setCriticalDeadlineInput("");
+    setCriticalAmbiguous(false);
+    setCriticalError("");
+  };
+
+  // FR-G3: marks one of a commitment's two checkpoints acknowledged, from the commitment detail sheet.
+  const acknowledgeCommitmentCheckpoint = (commitment: Commitment, stage: Checkpoint["stage"]) => {
+    setCheckpoints((all) => {
+      const list = all[commitment.id];
+      if (!list) return all;
+      return { ...all, [commitment.id]: list.map((checkpoint) => (checkpoint.stage === stage ? acknowledgeCheckpoint(checkpoint) : checkpoint)) };
+    });
+    // Same known gap as the escalation tick above: the client only tracks
+    // checkpoints by commitment id locally, not by their own server row id,
+    // so there's no correct id to sync this acknowledgment to yet. Updating
+    // local state (above) is what actually silences future escalation and
+    // is correct regardless of server sync. `checkpointUpdateCloud` is kept
+    // as a named mutation, ready to wire in once checkpoint row ids are
+    // tracked client-side (see MERGE-NOTES.md "known gap").
+    void checkpointUpdateCloud;
+  };
+
+  const addCommitment = () => {
+    if (!capture.trim()) return;
+    if (/don'?t let me forget/i.test(capture)) {
+      const result = parseCriticalCommitment(capture);
+      if (result.ambiguous || !result.deadline) {
+        setPendingCriticalTitle(result.title);
+        setCriticalDeadlineInput("");
+        setCriticalAmbiguous(true);
+        setCriticalError("");
+        setShowCriticalPrompt(true);
+        setCapture("");
+        return;
+      }
+      commitCritical(result.deadline, result.title);
+      setCapture("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    if (active.length >= 6) {
+      setShowRescue(true);
+      return;
+    }
+    const extracted = extractMeetingLink(capture); const link = meetingUrl.trim() ? { provider: meetingProvider, url: normalizeMeetingUrl(meetingUrl) } : extracted; const linkError = link ? validateMeetingUrl(link.url, link.provider) : null; if (linkError) { setMeetingError(linkError); return; } const parsed = parseCommitment(capture); const next = { ...parsed, meetingProvider: link?.provider, meetingUrl: link?.url }; setCommitments((items) => [...items, next]);
+    if (isAuthenticated) createCloudCommitment.mutate(
+      { title: next.title, category: next.category, scheduledDate: new Date().toISOString().slice(0, 10), timeStart: next.timeStart, timeEnd: next.timeEnd, priority: next.priority, status: next.status, riskState: next.riskState, critical: false, meetingProvider: meetingUrl.trim() ? meetingProvider : undefined, meetingUrl: meetingUrl.trim() || undefined },
+      { onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)), onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet â€” Eagle will retry.") }
+    );
+    setCapture("");
+    setMeetingUrl("");
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const moveMissedToTomorrow = () => {
+    setCommitments((items) => items.map((item) => item.status === "missed" ? { ...item, status: "rescheduled", riskState: "rescued" } : item));
+    setShowReview(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  return (
+    <ScreenContainer className="px-5" containerClassName="bg-background">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>D-EAGLE HUB</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>Good morning, Alex.</Text>
+            <Text style={[styles.date, { color: colors.muted }]}>{dateLabel}</Text>
+          </View>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}><Text style={styles.avatarText}>A</Text></View>
+        </View>
+
+        <View style={[styles.briefCard, { backgroundColor: colors.foreground }]}>
+          <View style={styles.briefTop}><View><Text style={styles.briefKicker}>MORNING BRIEFING</Text><Text style={styles.briefTitle}>Your day, held.</Text></View><Ionicons name="sparkles" size={24} color="#F4B942" /></View>
+          <Text style={styles.briefBody}>{active.length} commitments on deck. Iâ€™ll surface the one that needs you most.</Text>
+          <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.max(8, (completedCount / Math.max(commitments.length, 1)) * 100)}%` }]} /></View>
+          <View style={styles.briefMeta}><Text style={styles.briefMetaText}>{completedCount} closed</Text><Text style={styles.briefMetaText}>{Math.max(active.length, 0)} remaining</Text></View>
+        </View>
+
+        {nextMeeting && <Pressable onPress={() => openMeeting(nextMeeting.meetingProvider!, nextMeeting.meetingUrl)} style={({ pressed }) => [styles.quickJoin, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="videocam" size={18} color="#FFFFFF" /><View style={styles.quickJoinCopy}><Text style={styles.quickJoinTitle}>Join {nextMeeting.meetingProvider === "zoom" ? "Zoom" : "Google Meet"} soon</Text><Text style={styles.quickJoinBody}>{nextMeeting.title} Â· {nextMeeting.minutesUntil === 0 ? "starting now" : `starts in ${nextMeeting.minutesUntil} min`} Â· {nextMeeting.timeStart}</Text></View><Ionicons name="arrow-forward" size={17} color="#FFFFFF" /></Pressable>}
+
+        {atRisk && <Pressable onPress={() => { setSelected(atRisk); speakEagle(`${atRisk.title} starts at ${atRisk.timeStart}.`); }} style={({ pressed }) => [styles.rescueBanner, { backgroundColor: "#FFF4D9", borderColor: "#F4B942" }, pressed && styles.pressed]}>
+          <View style={[styles.riskDot, { backgroundColor: "#F4B942" }]} /><View style={styles.rescueText}><Text style={[styles.rescueTitle, { color: colors.foreground }]}>Eagle has a read on this one</Text><Text style={[styles.rescueBody, { color: colors.muted }]}>{atRisk.title} tends to slip after 6 PM. Want a rescue plan?</Text></View><Ionicons name="chevron-forward" size={19} color={colors.foreground} />
+        </Pressable>}
+
+        <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>On your radar</Text><Text style={[styles.sectionSub, { color: colors.muted }]}>Six is the ceiling. Clarity is the goal.</Text></View><View style={styles.headingMeta}>{meetingFilter !== "all" && <View style={[styles.filterBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.filterBadgeText, { color: colors.primary }]}>{meetingFilter === "zoom" ? "Zoom only" : "Google Meet only"}</Text><Pressable onPress={() => setMeetingFilter("all")} accessibilityLabel="Clear meeting filter"><Ionicons name="close-circle" size={15} color={colors.primary} /></Pressable></View>}<Text style={[styles.count, { color: colors.primary }]}>{active.length}/6</Text></View></View><View style={styles.meetingLegend}><Text style={[styles.legendLabel, { color: colors.muted }]}>MEETING LINKS</Text><Pressable onPress={() => setMeetingFilter(meetingFilter === "zoom" ? "all" : "zoom")} style={[styles.legendItem, meetingFilter === "zoom" && styles.legendActive]}><Ionicons name="videocam-outline" size={14} color="#2D8CFF" /><Text style={[styles.legendText, { color: colors.muted }]}>Zoom</Text></Pressable><Pressable onPress={() => setMeetingFilter(meetingFilter === "meet" ? "all" : "meet")} style={[styles.legendItem, meetingFilter === "meet" && styles.legendActive]}><Ionicons name="videocam-outline" size={14} color="#0B6E69" /><Text style={[styles.legendText, { color: colors.muted }]}>Google Meet</Text></Pressable>{meetingFilter !== "all" && <Pressable onPress={() => setMeetingFilter("all")}><Text style={[styles.legendClear, { color: colors.primary }]}>Clear</Text></Pressable>}</View>
+
+        <View style={styles.timeline}>
+          {active.map((item, index) => <Pressable key={item.id} onPress={() => { setSelected(item); setDeleteConfirmId(null); }} style={({ pressed }) => [styles.commitmentRow, pressed && styles.pressed]}>
+            <View style={styles.timeCol}><Text style={[styles.time, { color: colors.foreground }]}>{item.timeStart}</Text><Text style={[styles.timeEnd, { color: colors.muted }]}>{item.timeEnd}</Text></View>
+            <View style={[styles.timelineLine, { backgroundColor: colors.border }]}><View style={[styles.timelineDot, { backgroundColor: item.riskState === "at_risk" ? "#F4B942" : colors.primary }]} /></View>
+            <View style={[styles.commitmentCard, { backgroundColor: colors.surface, borderColor: item.riskState === "at_risk" ? "#F4B942" : colors.border }]}>
+              <View style={styles.cardTop}><View style={styles.categoryPill}><Text style={[styles.categoryText, { color: colors.primary }]}>{item.category}</Text></View><View style={styles.cardIcons}>{item.warningMuted === false && <Ionicons name="alarm-outline" size={14} color={colors.primary} />}{item.meetingUrl && <Pressable {...({ title: item.meetingProvider === "zoom" ? "Zoom meeting" : "Google Meet meeting" } as any)} accessibilityLabel={item.meetingProvider === "zoom" ? "Zoom meeting link saved" : "Google Meet meeting link saved"}><Ionicons name="videocam-outline" size={15} color={colors.primary} /></Pressable>}{item.critical && <Ionicons name="flag" size={14} color={cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color} />}{item.syncFailed && <Ionicons name="cloud-offline-outline" size={14} color="#E87561" accessibilityLabel="Not yet synced â€” Eagle will retry" />}</View></View>
+              <Text style={[styles.commitmentTitle, { color: colors.foreground }]}>{item.title}</Text>
+              {item.critical && cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label ? <Text style={{ fontSize: 10, fontWeight: "700", marginTop: 6, color: cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color }}>{cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label}</Text> : null}
+              <View style={styles.cardBottom}><View style={styles.riskWrap}><View style={[styles.smallDot, { backgroundColor: item.riskState === "at_risk" ? "#F4B942" : colors.primary }]} /><Text style={[styles.riskText, { color: item.riskState === "at_risk" ? "#9B6A00" : colors.muted }]}>{riskCopy(item.riskState)}</Text></View><Text style={[styles.priority, { color: item.priority === "high" ? "#E87561" : colors.muted }]}>{item.priority} priority</Text></View>
+            </View>
+          </Pressable>)}
+          {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={styles.empty}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyBody, { color: colors.muted, marginTop: 10 }]}>Loading todayâ€¦</Text></View>}
+          {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && active.length === 0 && <View style={styles.empty}><Ionicons name="moon-outline" size={28} color={colors.primary} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your radar is clear.</Text><Text style={[styles.emptyBody, { color: colors.muted }]}>Capture what matters, then let Eagle hold it.</Text></View>}
+        </View>
+
+        <View style={[styles.captureCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.captureIcon}><Ionicons name="add" size={22} color="#FFFFFF" /></View>
+          <TextInput value={capture} onChangeText={setCapture} onSubmitEditing={addCommitment} returnKeyType="done" placeholder="What do you need to hold?" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground }]} />
+          <Animated.View style={{ transform: [{ scale: pulse }] }}><Pressable onPress={toggleVoiceCapture} accessibilityLabel={isListening ? "Stop listening" : "Start voice capture"} style={({ pressed }) => [styles.micButton, { backgroundColor: isListening ? "#E87561" : colors.border }, pressed && styles.pressed]}><Ionicons name={isListening ? "stop" : "mic"} size={17} color={isListening ? "#FFFFFF" : colors.foreground} /></Pressable></Animated.View><Pressable onPress={addCommitment} disabled={!capture.trim() || createCloudCommitment.isPending} style={({ pressed }) => [styles.sendButton, { backgroundColor: capture.trim() ? colors.primary : colors.border }, pressed && styles.pressed]}>{createCloudCommitment.isPending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="arrow-up" size={18} color="#FFFFFF" />}</Pressable>
+        </View>
+        <View style={styles.meetingCapture}><View style={styles.providerRow}><Pressable onPress={() => setMeetingProvider("zoom")} style={[styles.providerChip, { backgroundColor: meetingProvider === "zoom" ? "#2D8CFF" : colors.border }]}><Text style={styles.providerText}>Zoom</Text></Pressable><Pressable onPress={() => setMeetingProvider("meet")} style={[styles.providerChip, { backgroundColor: meetingProvider === "meet" ? "#0B6E69" : colors.border }]}><Text style={styles.providerText}>Google Meet</Text></Pressable></View><TextInput value={meetingUrl} onChangeText={(value) => { setMeetingUrl(value); setMeetingError(""); }} onEndEditing={() => setMeetingUrl(normalizeMeetingUrl(meetingUrl))} autoCapitalize="none" keyboardType="url" placeholder={editingVoiceLink ? "Edit detected meeting URL" : "Optional meeting URL for this task"} placeholderTextColor={colors.muted} style={[styles.meetingInput, { color: colors.foreground, borderColor: meetingError ? "#E87561" : colors.border }]} />{meetingError ? <Text style={styles.meetingError}>{meetingError}</Text> : null}</View><Text style={[styles.captureHint, { color: colors.muted }]}>Try â€œCall Mum tomorrow at 7 pmâ€</Text>
+
+        <Pressable onPress={() => setShowReview(true)} style={({ pressed }) => [styles.reviewLink, pressed && styles.pressed]}><Ionicons name="moon" size={17} color={colors.primary} /><Text style={[styles.reviewText, { color: colors.primary }]}>Open tonightâ€™s review</Text><Ionicons name="arrow-forward" size={16} color={colors.primary} /></Pressable>
+      </ScrollView>
+
+      {voiceToast ? <View style={[styles.voiceToast, { backgroundColor: colors.foreground }]}><Ionicons name="checkmark-circle" size={16} color="#F4B942" /><Text style={styles.voiceToastText}>{voiceToast}</Text><Pressable onPress={() => { setVoiceEditUrl(meetingUrl); setVoiceEditProvider(meetingProvider); setShowVoiceEditor(true); setVoiceToast(""); }}><Text style={styles.voiceUndo}>Edit</Text></Pressable><Pressable onPress={() => { if (previousVoiceLink) { setMeetingProvider(previousVoiceLink.provider); setMeetingUrl(previousVoiceLink.url); } else { setMeetingProvider("zoom"); setMeetingUrl(""); } setPreviousVoiceLink(null); setVoiceToast(""); setEditingVoiceLink(false); }}><Text style={styles.voiceUndo}>Undo</Text></Pressable></View> : null}
+      {syncNotice ? <View style={[styles.voiceToast, { backgroundColor: "#E87561", bottom: voiceToast ? 138 : 82 }]}><Ionicons name="cloud-offline-outline" size={16} color="#FFFFFF" /><Text style={styles.voiceToastText}>{syncNotice}</Text></View> : null}
+
+      <Modal visible={showVoiceEditor} transparent animationType="fade" onRequestClose={() => setShowVoiceEditor(false)}><View style={styles.modalBackdrop}><View style={[styles.voiceEditor, { backgroundColor: colors.background }]}><Text style={[styles.sheetEyebrow, { color: colors.primary }]}>EDIT DETECTED LINK</Text><Text style={[styles.voiceEditorTitle, { color: colors.foreground }]}>Check the meeting URL</Text><View style={styles.providerRow}><Pressable onPress={() => setVoiceEditProvider("zoom")} style={[styles.providerChip, { backgroundColor: voiceEditProvider === "zoom" ? "#2D8CFF" : colors.border }]}><Text style={styles.providerText}>Zoom</Text></Pressable><Pressable onPress={() => setVoiceEditProvider("meet")} style={[styles.providerChip, { backgroundColor: voiceEditProvider === "meet" ? "#0B6E69" : colors.border }]}><Text style={styles.providerText}>Google Meet</Text></Pressable></View><TextInput value={voiceEditUrl} onChangeText={setVoiceEditUrl} autoCapitalize="none" keyboardType="url" style={[styles.meetingInput, { color: colors.foreground, borderColor: colors.border }]} placeholder="Paste the corrected URL" placeholderTextColor={colors.muted} /><View style={styles.voiceEditorActions}><Pressable onPress={() => { const normalized = normalizeMeetingUrl(voiceEditUrl); const error = validateMeetingUrl(normalized, voiceEditProvider); if (error) { setMeetingError(error); return; } setMeetingProvider(voiceEditProvider); setMeetingUrl(normalized); setMeetingError(""); setEditingVoiceLink(false); setShowVoiceEditor(false); }} style={[styles.saveMeeting, { backgroundColor: colors.primary }]}><Text style={styles.saveMeetingText}>Use corrected link</Text></Pressable><Pressable onPress={() => setShowVoiceEditor(false)} style={[styles.removeMeeting, { borderColor: colors.border }]}><Text style={[styles.removeMeetingText, { color: colors.foreground }]}>Cancel</Text></Pressable></View></View></View></Modal>
+
+      <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+        <View style={styles.modalBackdrop}><View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          {selected && <><View style={styles.sheetHandle} /><Text style={[styles.sheetEyebrow, { color: colors.primary }]}>{selected.category.toUpperCase()} Â· {selected.timeStart}</Text><Text style={[styles.sheetTitle, { color: colors.foreground }]}>{selected.title}</Text><Text style={[styles.sheetBody, { color: colors.muted }]}>This commitment is {riskCopy(selected.riskState).toLowerCase()}. Eagle will keep an eye on it without adding noise.</Text>
+            <View style={styles.sheetActions}><Pressable onPress={() => { update(selected.id, { status: "completed", riskState: "stable" }); setSelected(null); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="checkmark" size={18} color="#FFFFFF" /><Text style={styles.primaryActionText}>Complete</Text></Pressable><Pressable onPress={() => { update(selected.id, { status: "rescheduled", riskState: "rescued" }); setSelected(null); }} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Defer</Text></Pressable></View>
+            <Text style={[styles.meetingEditLabel, { color: colors.muted }]}>MEETING DETAILS</Text><View style={styles.providerRow}><Pressable onPress={() => setEditMeetingProvider("zoom")} style={[styles.providerChip, { backgroundColor: editMeetingProvider === "zoom" ? "#2D8CFF" : colors.border }]}><Text style={styles.providerText}>Zoom</Text></Pressable><Pressable onPress={() => setEditMeetingProvider("meet")} style={[styles.providerChip, { backgroundColor: editMeetingProvider === "meet" ? "#0B6E69" : colors.border }]}><Text style={styles.providerText}>Google Meet</Text></Pressable></View><TextInput value={editMeetingUrl} onChangeText={(value) => { setEditMeetingUrl(value); setMeetingError(""); }} onEndEditing={() => setEditMeetingUrl(normalizeMeetingUrl(editMeetingUrl))} autoCapitalize="none" keyboardType="url" placeholder="Paste a meeting URL" placeholderTextColor={colors.muted} style={[styles.meetingInput, { color: colors.foreground, borderColor: meetingError ? "#E87561" : colors.border }]} />{meetingError ? <Text style={styles.meetingError}>{meetingError}</Text> : null}<View style={styles.meetingEditActions}><Pressable onPress={() => { const error = validateMeetingUrl(editMeetingUrl, editMeetingProvider); if (error) { setMeetingError(error); return; } update(selected.id, { meetingProvider: editMeetingUrl.trim() ? editMeetingProvider : undefined, meetingUrl: editMeetingUrl.trim() || undefined, warningMuted: editWarningMuted }); setSelected({ ...selected, meetingProvider: editMeetingProvider, meetingUrl: editMeetingUrl.trim() || undefined, warningMuted: editWarningMuted }); }} style={[styles.saveMeeting, { backgroundColor: colors.primary }]}><Text style={styles.saveMeetingText}>Save meeting link</Text></Pressable><Pressable onPress={() => { update(selected.id, { meetingProvider: undefined, meetingUrl: undefined }); setEditMeetingUrl(""); }} style={[styles.removeMeeting, { borderColor: colors.border }]}><Text style={[styles.removeMeetingText, { color: colors.foreground }]}>Remove</Text></Pressable></View><View style={styles.warningOverride}><Text style={[styles.warningOverrideLabel, { color: colors.muted }]}>Five-minute warning for this meeting</Text><Switch value={!editWarningMuted} onValueChange={(value: boolean) => setEditWarningMuted(!value)} trackColor={{ false: colors.border, true: colors.primary }} thumbColor="#FFFFFF" /></View><View style={styles.meetingActions}><Pressable onPress={() => openMeeting("zoom", selected.meetingUrl)} style={[styles.meetingButton, { borderColor: colors.border }]}><Ionicons name="videocam" size={16} color="#2D8CFF" /><Text style={[styles.meetingText, { color: colors.foreground }]}>Open Zoom</Text></Pressable><Pressable onPress={() => openMeeting("meet", selected.meetingUrl)} style={[styles.meetingButton, { borderColor: colors.border }]}><Ionicons name="videocam" size={16} color="#0B6E69" /><Text style={[styles.meetingText, { color: colors.foreground }]}>Open Meet</Text></Pressable></View><View style={styles.meetingSchedule}><Pressable onPress={() => scheduleMeeting("zoom")}><Text style={styles.scheduleText}>Schedule Zoom at {selected.timeStart}</Text></Pressable><Pressable onPress={() => scheduleMeeting("meet")}><Text style={styles.scheduleText}>Schedule Meet at {selected.timeStart}</Text></Pressable></View><Pressable onPress={() => { if (selected.critical) { const ids = criticalNotificationIds.current[selected.id]; if (ids) { cancelCriticalCascade(ids); delete criticalNotificationIds.current[selected.id]; } setCheckpoints((all) => { const copy = { ...all }; delete copy[selected.id]; return copy; }); update(selected.id, { critical: false, criticalDeadline: undefined }); setSelected(null); } else { setPendingCriticalTitle(null); setCriticalDeadlineInput(""); setCriticalAmbiguous(false); setCriticalError(""); setShowCriticalPrompt(true); } }} style={styles.flagAction}><Ionicons name={selected.critical ? "flag" : "flag-outline"} size={17} color="#E87561" /><Text style={styles.flagText}>{selected.critical ? "Remove critical flag" : "Donâ€™t let me forget this"}</Text></Pressable>
+            <Pressable onPress={() => { if (deleteConfirmId === selected.id) { removeCommitment(selected); setDeleteConfirmId(null); } else { setDeleteConfirmId(selected.id); } }} style={[styles.flagAction, { marginTop: 4 }]}><Ionicons name="trash-outline" size={16} color={colors.muted} /><Text style={[styles.flagText, { color: colors.muted }]}>{deleteConfirmId === selected.id ? "Tap again to permanently delete" : "Delete this commitment"}</Text></Pressable>
+            {selected.critical && selected.criticalDeadline && <Text style={[styles.criticalMeta, { color: colors.muted }]}>Two checkpoints set Â· deadline {new Date(selected.criticalDeadline).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>}
+            {selected.critical && <View style={{ marginTop: 8 }}>
+              {(checkpoints[selected.id] ?? []).map((checkpoint) => <View key={checkpoint.stage} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}>
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>{checkpoint.stage === "day_before" ? "1 day before" : "3 hours before"}</Text>
+                  <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{checkpoint.status === "acknowledged" ? "Acknowledged" : checkpoint.status === "escalated" ? "Escalated Â· voice alert sent" : checkpoint.status === "missed" ? "Missed" : "Pending"}</Text>
+                </View>
+                {checkpoint.status !== "acknowledged" && checkpoint.status !== "missed" && <Pressable onPress={() => acknowledgeCommitmentCheckpoint(selected, checkpoint.stage)} style={[styles.removeMeeting, { borderColor: colors.border, paddingVertical: 6, paddingHorizontal: 12 }]}><Text style={[styles.removeMeetingText, { color: colors.primary }]}>Acknowledge</Text></Pressable>}
+              </View>)}
+              {(checkpoints[selected.id]?.length ?? 0) === 0 && <Text style={{ fontSize: 12, color: colors.muted }}>Checkpoints will be scheduled the moment this is flagged critical.</Text>}
+            </View>}
+          </>}
+        </View></View>
+      </Modal>
+
+      <Modal visible={showReview} transparent animationType="slide" onRequestClose={() => setShowReview(false)}><View style={styles.modalBackdrop}><View style={[styles.sheet, { backgroundColor: colors.background }]}><View style={styles.sheetHandle} /><Text style={[styles.sheetEyebrow, { color: colors.primary }]}>NIGHTLY REVIEW Â· 10:00 PM</Text><Text style={[styles.sheetTitle, { color: colors.foreground }]}>Letâ€™s close the loop.</Text><Text style={[styles.sheetBody, { color: colors.muted }]}>Anything still open at midnight becomes missed. You can move missed commitments to tomorrow with one tap.</Text><View style={styles.reviewBuckets}><ReviewBucket label="Completed" count={completedCount} icon="checkmark-circle" color="#0B6E69" colors={colors} /><ReviewBucket label="Rescheduled" count={commitments.filter((i) => i.status === "rescheduled").length} icon="time" color="#F4B942" colors={colors} /><ReviewBucket label="Missed" count={commitments.filter((i) => i.status === "missed").length} icon="close-circle" color="#E87561" colors={colors} /></View>
+              {commitments.some((item) => item.critical) && <View style={{ marginBottom: 18 }}>
+                <Text style={[styles.meetingEditLabel, { color: colors.muted }]}>CRITICAL CHECKPOINTS</Text>
+                {commitments.filter((item) => item.critical).map((item) => { const status = cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])); return <View key={item.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}><Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flex: 1, marginRight: 10 }}>{item.title}</Text><Text style={{ fontSize: 11, fontWeight: "800", color: status.color }}>{status.label || "Schedulingâ€¦"}</Text></View>; })}
+              </View>}
+              <Pressable onPress={moveMissedToTomorrow} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.primaryActionText}>Yes, move missed to tomorrow</Text></Pressable><Pressable onPress={() => setShowReview(false)} style={styles.laterAction}><Text style={[styles.laterText, { color: colors.muted }]}>Iâ€™ll review the list</Text></Pressable></View></View></Modal>
+
+      <Modal visible={showRescue} transparent animationType="slide" onRequestClose={() => setShowRescue(false)}><View style={styles.modalBackdrop}><View style={[styles.sheet, { backgroundColor: colors.background }]}><View style={styles.sheetHandle} /><Text style={[styles.sheetEyebrow, { color: "#E87561" }]}>SIX-COMMITMENT CEILING</Text><Text style={[styles.sheetTitle, { color: colors.foreground }]}>Your day is full by design.</Text><Text style={[styles.sheetBody, { color: colors.muted }]}>Eagle found the lowest-impact commitment to move instead of making you choose what to drop.</Text><View style={[styles.swapCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.swapLabel, { color: colors.muted }]}>SUGGESTED TO MOVE</Text><Text style={[styles.swapTitle, { color: colors.foreground }]}>{active[active.length - 1]?.title ?? "No commitment"}</Text><Text style={[styles.swapReason, { color: colors.muted }]}>Stable history Â· lowest rescue impact</Text></View><Pressable onPress={() => { if (active.length) update(active[active.length - 1].id, { status: "rescheduled", riskState: "rescued" }); setShowRescue(false); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.primaryActionText}>Confirm swap</Text></Pressable><Pressable onPress={() => setShowRescue(false)} style={styles.laterAction}><Text style={[styles.laterText, { color: colors.muted }]}>Keep tomorrow full</Text></Pressable></View></View></Modal>
+      <Modal visible={showOnboarding} transparent animationType="fade" onRequestClose={finishOnboarding}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.voiceEditor, { backgroundColor: colors.background }]}>
+            <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 14 }}><Ionicons name={ONBOARDING_SLIDES[onboardingStep].icon} size={30} color={colors.primary} /></View>
+            <Text style={[styles.voiceEditorTitle, { color: colors.foreground, textAlign: "center" }]}>{ONBOARDING_SLIDES[onboardingStep].title}</Text>
+            <Text style={[styles.sheetBody, { color: colors.muted, textAlign: "center", marginTop: 8, marginBottom: 18 }]}>{ONBOARDING_SLIDES[onboardingStep].body}</Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 18 }}>{ONBOARDING_SLIDES.map((_, i) => <View key={i} style={{ width: i === onboardingStep ? 16 : 6, height: 6, borderRadius: 3, backgroundColor: i === onboardingStep ? colors.primary : colors.border }} />)}</View>
+            <View style={styles.voiceEditorActions}>
+              {onboardingStep < ONBOARDING_SLIDES.length - 1 ? <>
+                <Pressable onPress={() => setOnboardingStep((step) => step + 1)} style={[styles.saveMeeting, { backgroundColor: colors.primary }]}><Text style={styles.saveMeetingText}>Next</Text></Pressable>
+                <Pressable onPress={finishOnboarding} style={[styles.removeMeeting, { borderColor: colors.border }]}><Text style={[styles.removeMeetingText, { color: colors.foreground }]}>Skip</Text></Pressable>
+              </> : <Pressable onPress={finishOnboarding} style={[styles.saveMeeting, { backgroundColor: colors.primary, flex: 1 }]}><Text style={styles.saveMeetingText}>Got it</Text></Pressable>}
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={showCriticalPrompt} transparent animationType="fade" onRequestClose={() => { setShowCriticalPrompt(false); setPendingCriticalTitle(null); }}><View style={styles.modalBackdrop}><View style={[styles.voiceEditor, { backgroundColor: colors.background }]}><Text style={[styles.sheetEyebrow, { color: "#E87561" }]}>DONâ€™T LET ME FORGET</Text><Text style={[styles.voiceEditorTitle, { color: colors.foreground }]}>{criticalAmbiguous ? "What time is the deadline?" : "Before when?"}</Text><Text style={[styles.sheetBody, { color: colors.muted, marginTop: 0, marginBottom: 14 }]}>{criticalAmbiguous ? "Eagle needs one clear time to set the two checkpoints." : "Eagle will set exactly two checkpoints: one day before, and three hours before."}</Text><TextInput value={criticalDeadlineInput} onChangeText={(value) => { setCriticalDeadlineInput(value); setCriticalError(""); }} autoCapitalize="none" placeholder={criticalAmbiguous ? "e.g. 5pm tomorrow" : "e.g. before 5pm tomorrow"} placeholderTextColor={colors.muted} style={[styles.meetingInput, { color: colors.foreground, borderColor: criticalError ? "#E87561" : colors.border }]} />{criticalError ? <Text style={styles.meetingError}>{criticalError}</Text> : null}<View style={styles.voiceEditorActions}><Pressable onPress={() => { const phrase = criticalAmbiguous ? `before ${criticalDeadlineInput}` : criticalDeadlineInput; const result = parseDeadlinePhrase(phrase); if (result.ambiguous || !result.deadline) { setCriticalAmbiguous(true); setCriticalError("Give Eagle one specific time, like 5pm or 5pm tomorrow."); return; } commitCritical(result.deadline); }} style={[styles.saveMeeting, { backgroundColor: colors.primary }]}><Text style={styles.saveMeetingText}>Set two checkpoints</Text></Pressable><Pressable onPress={() => { setShowCriticalPrompt(false); setPendingCriticalTitle(null); }} style={[styles.removeMeeting, { borderColor: colors.border }]}><Text style={[styles.removeMeetingText, { color: colors.foreground }]}>Cancel</Text></Pressable></View></View></View></Modal>
+    </ScreenContainer>
+  );
+}
+
+function ReviewBucket({ label, count, icon, color, colors }: { label: string; count: number; icon: keyof typeof Ionicons.glyphMap; color: string; colors: ReturnType<typeof useColors> }) {
+  return <View style={[styles.bucket, { backgroundColor: colors.surface, borderColor: colors.border }]}><Ionicons name={icon} size={20} color={color} /><Text style={[styles.bucketCount, { color: colors.foreground }]}>{count}</Text><Text style={[styles.bucketLabel, { color: colors.muted }]}>{label}</Text></View>;
+}
+
+const styles = StyleSheet.create({
+  content: { paddingTop: 22, paddingBottom: 42 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 2.2, marginBottom: 7 }, title: { fontSize: 27, fontWeight: "700", letterSpacing: -0.7 }, date: { fontSize: 14, marginTop: 5 }, avatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" }, avatarText: { color: "#FFFFFF", fontWeight: "800", fontSize: 16 }, briefCard: { borderRadius: 22, padding: 20, marginBottom: 15 }, briefTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }, briefKicker: { color: "#B5CAC6", fontSize: 10, letterSpacing: 1.5, fontWeight: "800", marginBottom: 8 }, briefTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" }, briefBody: { color: "#C8D7D4", fontSize: 14, lineHeight: 21, marginTop: 12, maxWidth: 280 }, progressTrack: { height: 6, backgroundColor: "#36504D", borderRadius: 3, marginTop: 19, overflow: "hidden" }, progressFill: { height: 6, backgroundColor: "#F4B942", borderRadius: 3 }, briefMeta: { flexDirection: "row", justifyContent: "space-between", marginTop: 9 }, briefMetaText: { color: "#B5CAC6", fontSize: 12 }, rescueBanner: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 23 }, riskDot: { width: 10, height: 10, borderRadius: 5, marginRight: 11 }, rescueText: { flex: 1 }, rescueTitle: { fontSize: 14, fontWeight: "700", marginBottom: 3 }, rescueBody: { fontSize: 12, lineHeight: 17 }, sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 14 }, headingMeta: { flexDirection: "row", alignItems: "center", gap: 8 }, filterBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4 }, filterBadgeText: { fontSize: 10, fontWeight: "800" }, sectionTitle: { fontSize: 19, fontWeight: "700" }, sectionSub: { fontSize: 12, marginTop: 4 }, count: { fontSize: 13, fontWeight: "800" }, timeline: { gap: 12 }, commitmentRow: { flexDirection: "row", minHeight: 92 }, timeCol: { width: 52, paddingTop: 11 }, time: { fontSize: 13, fontWeight: "700" }, timeEnd: { fontSize: 11, marginTop: 4 }, timelineLine: { width: 1, marginHorizontal: 10, position: "relative" }, timelineDot: { position: "absolute", width: 9, height: 9, borderRadius: 5, left: -4, top: 15 }, commitmentCard: { flex: 1, borderWidth: 1, borderRadius: 16, padding: 13 },   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, cardIcons: { flexDirection: "row", alignItems: "center", gap: 8 }, categoryPill: { backgroundColor: "#DDEDEA", borderRadius: 5, paddingHorizontal: 7, paddingVertical: 4 }, categoryText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 }, commitmentTitle: { fontSize: 15, fontWeight: "700", lineHeight: 20, marginTop: 9 }, cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12 }, riskWrap: { flexDirection: "row", alignItems: "center" }, smallDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 }, riskText: { fontSize: 11, fontWeight: "600" }, priority: { fontSize: 11 }, empty: { alignItems: "center", paddingVertical: 32 }, emptyTitle: { fontSize: 16, fontWeight: "700", marginTop: 10 }, emptyBody: { fontSize: 13, marginTop: 5 }, captureCard: { flexDirection: "row", alignItems: "center", borderRadius: 17, borderWidth: 1, padding: 8, marginTop: 20 }, captureIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#0B6E69", alignItems: "center", justifyContent: "center" }, input: { flex: 1, fontSize: 14, paddingHorizontal: 11, height: 40 }, sendButton: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },   captureHint: { fontSize: 11, marginTop: 7, marginLeft: 12 },   voiceToast: { position: "absolute", bottom: 82, alignSelf: "center", zIndex: 3, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 7 }, voiceToastText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" }, voiceEditor: { width: "92%", alignSelf: "center", borderRadius: 22, padding: 20 }, voiceEditorTitle: { fontSize: 20, fontWeight: "700", marginBottom: 14 }, voiceEditorActions: { flexDirection: "row", gap: 8, marginTop: 12 }, voiceUndo: { color: "#F4B942", fontSize: 12, fontWeight: "800", marginLeft: 6 }, meetingLegend: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }, legendItem: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 5, borderRadius: 7 }, legendActive: { backgroundColor: "#E5EFEC" }, legendClear: { fontSize: 10, fontWeight: "800" }, legendLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1.1, marginRight: 2 }, legendText: { fontSize: 11 }, warningOverride: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 }, warningOverrideLabel: { fontSize: 12, fontWeight: "600" }, quickJoin: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 16, padding: 14, marginBottom: 16 }, quickJoinCopy: { flex: 1 }, quickJoinTitle: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" }, quickJoinBody: { color: "#D8EFEB", fontSize: 11, marginTop: 3 }, meetingEditLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginTop: 20, marginBottom: 8 }, meetingEditActions: { flexDirection: "row", gap: 8, marginTop: 9 }, saveMeeting: { flex: 1, borderRadius: 11, paddingVertical: 10, alignItems: "center" }, saveMeetingText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" }, removeMeeting: { borderWidth: 1, borderRadius: 11, paddingVertical: 10, paddingHorizontal: 14, alignItems: "center" }, removeMeetingText: { fontSize: 11, fontWeight: "700" }, meetingCapture: { marginTop: 10 }, providerRow: { flexDirection: "row", gap: 8, marginLeft: 2, marginBottom: 8 }, providerChip: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 12 }, providerText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },   meetingInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 40, fontSize: 13 }, meetingError: { color: "#C94F3B", fontSize: 11, marginTop: 5, marginLeft: 2 }, micButton: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 6 }, reviewLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 23 }, reviewText: { fontWeight: "700", fontSize: 13 }, pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] }, modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,36,42,0.46)" }, sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 34 }, sheetHandle: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: "#CBD5D3", marginBottom: 22 }, sheetEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginBottom: 8 }, sheetTitle: { fontSize: 27, fontWeight: "700", letterSpacing: -0.5 }, sheetBody: { fontSize: 14, lineHeight: 21, marginTop: 12 }, sheetActions: { flexDirection: "row", gap: 10, marginTop: 24 }, primaryAction: { flex: 1, minHeight: 50, borderRadius: 15, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }, primaryActionText: { color: "#FFFFFF", fontWeight: "800", fontSize: 14 }, secondaryAction: { flex: 0.55, minHeight: 50, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 1 }, secondaryActionText: { fontWeight: "700", fontSize: 14 }, flagAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, paddingVertical: 10 }, flagText: { color: "#E87561", fontSize: 13, fontWeight: "700" }, criticalMeta: { textAlign: "center", fontSize: 11, marginTop: -6, marginBottom: 4 }, reviewBuckets: { flexDirection: "row", gap: 9, marginTop: 22, marginBottom: 22 }, bucket: { flex: 1, minHeight: 103, borderRadius: 15, borderWidth: 1, padding: 12 }, bucketCount: { fontSize: 25, fontWeight: "700", marginTop: 9 }, bucketLabel: { fontSize: 11, marginTop: 2 },   meetingActions: { flexDirection: "row", gap: 9, marginTop: 18 }, meetingButton: { flex: 1, minHeight: 43, borderWidth: 1, borderRadius: 13, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 }, meetingText: { fontSize: 12, fontWeight: "700" }, meetingSchedule: { flexDirection: "row", justifyContent: "space-between", marginTop: 13 }, scheduleText: { color: "#0B6E69", fontSize: 11, fontWeight: "700" }, laterAction: { alignItems: "center", paddingVertical: 16 }, laterText: { fontSize: 13, fontWeight: "600" }, swapCard: { borderWidth: 1, borderRadius: 16, padding: 15, marginTop: 22, marginBottom: 22 }, swapLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4 }, swapTitle: { fontSize: 17, fontWeight: "700", marginTop: 8 }, swapReason: { fontSize: 12, marginTop: 5 },
+});
+
+
+
+====================================================
+== app/(tabs)/dashboard.tsx
+====================================================
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
+import { DailySnapshot, getRollingWeekSnapshots } from "@/lib/weekly-snapshots";
+
+const QUOTES = ["Small promises, kept consistently, become momentum.", "Clarity is a kindness to your future self.", "One honest finish is worth ten perfect plans."];
+const THEMES = { Signal: { ink: "#10242A", gold: "#F4B942", pale: "#F5F1E7" }, Dawn: { ink: "#513B5C", gold: "#F59E9B", pale: "#FFF1EF" }, Grove: { ink: "#163B35", gold: "#A7D7B8", pale: "#EFF8F1" } };
+
+type ThemeName = keyof typeof THEMES;
+export default function DashboardScreen() {
+  const colors = useColors(); const { isAuthenticated } = useAuth(); const cloud = trpc.snapshots.list.useQuery(undefined, { enabled: isAuthenticated }); const generateQuote = trpc.quotes.generate.useMutation();
+  const [local, setLocal] = useState<DailySnapshot[]>([]); const [category, setCategory] = useState("All"); const [priority, setPriority] = useState("all"); const [range, setRange] = useState(7); const [quote, setQuote] = useState(QUOTES[0]); const [theme, setTheme] = useState<ThemeName>("Signal"); const [zoom, setZoom] = useState(1); const [sharing, setSharing] = useState(false); const [shared, setShared] = useState(false); const [previewUri, setPreviewUri] = useState<string | null>(null); const shareCard = useRef<View>(null);
+  useEffect(() => { getRollingWeekSnapshots().then(setLocal).catch(() => undefined); AsyncStorage.getItem("deagle-share-theme").then((saved) => { if (saved && saved in THEMES) setTheme(saved as ThemeName); }); }, []); useEffect(() => { AsyncStorage.setItem("deagle-share-theme", theme).catch(() => undefined); }, [theme]);
+  const snapshots = useMemo(() => cloud.data?.length ? cloud.data.map((x) => ({ date: x.snapshotDate, category: x.category, priority: x.priority ?? "all", completed: x.completed, closed: x.closed, rate: x.closed ? Math.round((x.completed / x.closed) * 100) : 0 })) : local, [cloud.data, local]);
+  const categories = useMemo(() => ["All", ...Array.from(new Set(snapshots.filter((x) => x.category !== "All").map((x) => x.category)))], [snapshots]);
+  const filtered = useMemo(() => snapshots.filter((x) => (category === "All" || x.category === category) && (priority === "all" || x.priority === priority)), [snapshots, category, priority]);
+  const days = useMemo(() => { const now = new Date(); return Array.from({ length: range }, (_, index) => { const date = new Date(now); date.setHours(0, 0, 0, 0); date.setDate(now.getDate() - (range - 1 - index)); const key = date.toISOString().slice(0, 10); return filtered.find((x) => x.date === key) ?? { date: key, category, priority, completed: 0, closed: 0, rate: 0 }; }); }, [filtered, category, priority, range]);
+  const totals = useMemo(() => days.reduce((a, x) => ({ completed: a.completed + x.completed, closed: a.closed + x.closed }), { completed: 0, closed: 0 }), [days]); const rate = totals.closed ? Math.round((totals.completed / totals.closed) * 100) : 0;
+  const breakdown = useMemo(() => ["high", "medium", "low"].map((level) => { const rows = snapshots.filter((x) => (category === "All" || x.category === category) && x.priority === level); const completed = rows.reduce((sum, x) => sum + x.completed, 0); const closed = rows.reduce((sum, x) => sum + x.closed, 0); return { level, completed, closed, rate: closed ? Math.round(completed / closed * 100) : 0 }; }), [snapshots, category]);
+  const topCategory = useMemo(() => { const totalsByCategory = snapshots.filter((x) => x.category !== "All").reduce<Record<string, number>>((acc, x) => { acc[x.category] = (acc[x.category] ?? 0) + x.completed; return acc; }, {}); return Object.entries(totalsByCategory).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "steady progress"; }, [snapshots]);
+  const palette = THEMES[theme];
+  const generatePersonalQuote = async () => { const result = await generateQuote.mutateAsync({ completionRate: rate, topCategory, completed: totals.completed, closed: totals.closed }); setQuote(result.quote); }; const generatePreview = async () => { setSharing(true); try { if (shareCard.current) { const uri = await captureRef(shareCard, { format: "png", quality: 1, result: "tmpfile" }); setPreviewUri(uri); } } finally { setSharing(false); } };
+  const confirmShare = async () => { if (!previewUri) return; if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(previewUri, { mimeType: "image/png", dialogTitle: "Share your Eagle weekly signal" }); else await Share.share({ title: "My Eagle weekly signal", message: `${rate}% completion Â· Top category: ${topCategory}` }); setPreviewUri(null); setShared(true); setTimeout(() => setShared(false), 2600); };
+  return <ScreenContainer className="px-5" containerClassName="bg-background"><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}><View ref={shareCard} collapsable={false} style={[styles.shareCanvas, { backgroundColor: palette.pale }]}><View style={styles.header}><View><Text style={[styles.eyebrow, { color: colors.primary }]}>WEEKLY SIGNAL</Text><Text style={[styles.title, { color: colors.foreground }]}>Your follow-through.</Text></View><Pressable accessibilityLabel="Preview weekly progress image" disabled={sharing} onPress={generatePreview} style={[styles.shareButton, { borderColor: colors.border, backgroundColor: colors.surface }]}>{sharing ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="share-outline" size={19} color={colors.primary} />}</Pressable></View><Text style={[styles.subtitle, { color: colors.muted }]}>A quiet look back at what you carried to the finish line.</Text><Text style={[styles.filterLabel, { color: colors.muted }]}>CATEGORY</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{categories.map((item) => <Pressable key={item} onPress={() => setCategory(item)} style={[styles.filter, { backgroundColor: category === item ? colors.primary : colors.surface, borderColor: colors.border }]}><Text style={{ color: category === item ? "#FFF" : colors.muted, fontSize: 12, fontWeight: "700" }}>{item}</Text></Pressable>)}</ScrollView><Text style={[styles.filterLabel, { color: colors.muted }]}>PRIORITY</Text><View style={styles.row}>{["all", "high", "medium", "low"].map((item) => <Pressable key={item} onPress={() => setPriority(item)} style={[styles.filter, { backgroundColor: priority === item ? colors.primary : colors.surface, borderColor: colors.border }]}><Text style={{ color: priority === item ? "#FFF" : colors.muted, fontSize: 12, fontWeight: "700" }}>{item === "all" ? "All" : item[0].toUpperCase() + item.slice(1)}</Text></Pressable>)}</View><Text style={[styles.filterLabel, { color: colors.muted }]}>DATE RANGE</Text><View style={styles.row}>{[7, 14, 30].map((item) => <Pressable key={item} onPress={() => setRange(item)} style={[styles.filter, { backgroundColor: range === item ? colors.primary : colors.surface, borderColor: colors.border }]}><Text style={{ color: range === item ? "#FFF" : colors.muted, fontSize: 12, fontWeight: "700" }}>{item} days</Text></Pressable>)}</View><View style={[styles.hero, { backgroundColor: palette.ink }]}><View style={styles.heroTop}><View><Text style={styles.heroLabel}>{category.toUpperCase()} Â· LAST {range} DAYS</Text><Text style={styles.heroNumber}>{rate}%</Text></View><View style={[styles.heroIcon, { backgroundColor: palette.gold }]}><Ionicons name="trending-up" size={23} color={palette.ink} /></View></View><Text style={styles.heroBody}>{totals.closed ? `${totals.completed} of ${totals.closed} closed commitments completed.` : "Complete a commitment and Eagle will start your signal."}</Text><Text style={[styles.heroQuote, { color: palette.gold }]}>â€œ{quote}â€</Text><Text style={styles.heroBody}>Top completed category: {topCategory}</Text><View style={styles.heroTrack}><View style={[styles.heroFill, { width: `${Math.max(rate, 3)}%`, backgroundColor: palette.gold }]} /></View></View></View><View style={styles.chartHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Completion rate</Text><Text style={[styles.sectionMeta, { color: colors.muted }]}>{range} days</Text></View><View style={[styles.chart, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.bars}>{days.map((day, index) => <View key={day.date} style={styles.barGroup}><View style={styles.barTrack}><View style={[styles.bar, { height: `${Math.max(day.rate, 4)}%`, backgroundColor: index === days.length - 1 ? colors.primary : "#C9D8D5" }]} /></View><Text style={[styles.barLabel, { color: colors.muted }]}>{new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2)}</Text></View>)}</View></View><View style={styles.chartHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Priority breakdown</Text><Text style={[styles.sectionMeta, { color: colors.muted }]}>Completed rate</Text></View><View style={[styles.breakdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>{breakdown.map((item) => <View key={item.level} style={styles.breakRow}><Text style={[styles.level, { color: colors.foreground }]}>{item.level[0].toUpperCase() + item.level.slice(1)}</Text><View style={styles.breakTrack}><View style={[styles.breakFill, { width: `${Math.max(item.rate, 2)}%`, backgroundColor: item.level === "high" ? "#E87561" : item.level === "medium" ? "#F4B942" : colors.primary }]} /></View><Text style={[styles.breakRate, { color: colors.muted }]}>{item.rate}%</Text></View>)}</View><Text style={[styles.shareHint, { color: colors.muted }]}>Tap share to preview and export this branded Signal card.</Text></ScrollView>{shared && <View style={[styles.toast, { backgroundColor: palette.ink }]}><Ionicons name="checkmark-circle" size={17} color={palette.gold} /><Text style={styles.toastText}>Progress image shared</Text></View>}<Modal visible={!!previewUri} transparent animationType="slide" onRequestClose={() => setPreviewUri(null)}><View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: colors.background }]}><View style={styles.modalHeader}><Text style={[styles.modalTitle, { color: colors.foreground }]}>Preview your Signal</Text><Pressable onPress={() => setPreviewUri(null)}><Ionicons name="close" size={22} color={colors.muted} /></Pressable></View>{previewUri && <View style={[styles.previewFrame, { transform: [{ scale: zoom }] }]}><Text style={[styles.previewBrand, { color: palette.ink }]}>DÂ·EAGLE HUB</Text><Text style={[styles.previewRate, { color: palette.ink }]}>{rate}%</Text><Text style={[styles.previewCopy, { color: palette.ink }]}>Top category: {topCategory}</Text><Text style={[styles.previewQuote, { color: palette.ink }]}>â€œ{quote}â€</Text><View style={[styles.previewStripe, { backgroundColor: palette.gold }]} /></View>}<View style={styles.zoomRow}><Text style={[styles.filterLabel, { color: colors.muted, marginTop: 0 }]}>PREVIEW ZOOM</Text><Pressable onPress={() => setZoom((value) => Math.max(0.8, Number((value - 0.1).toFixed(1))))} style={styles.zoomButton}><Ionicons name="remove" size={16} color={colors.foreground} /></Pressable><Text style={[styles.zoomValue, { color: colors.muted }]}>{Math.round(zoom * 100)}%</Text><Pressable onPress={() => setZoom((value) => Math.min(1.4, Number((value + 0.1).toFixed(1))))} style={styles.zoomButton}><Ionicons name="add" size={16} color={colors.foreground} /></Pressable></View><Text style={[styles.filterLabel, { color: colors.muted }]}>QUOTE</Text><View style={styles.quoteActions}><Pressable onPress={generatePersonalQuote} disabled={generateQuote.isPending} style={[styles.aiButton, { backgroundColor: colors.primary }]}><Ionicons name="sparkles" size={15} color="#FFF" /><Text style={styles.aiText}>{generateQuote.isPending ? "Writingâ€¦" : "Generate with Eagle AI"}</Text></Pressable></View><TextInput value={quote} onChangeText={setQuote} maxLength={100} style={[styles.quoteInput, { color: colors.foreground, borderColor: colors.border }]} /><Text style={[styles.filterLabel, { color: colors.muted }]}>THEME</Text><View style={styles.row}>{(Object.keys(THEMES) as ThemeName[]).map((item) => <Pressable key={item} onPress={() => setTheme(item)} style={[styles.filter, { backgroundColor: theme === item ? THEMES[item].ink : colors.surface, borderColor: colors.border }]}><Text style={{ color: theme === item ? "#FFF" : colors.muted, fontSize: 12, fontWeight: "700" }}>{item}</Text></Pressable>)}</View><Pressable onPress={confirmShare} style={[styles.confirm, { backgroundColor: colors.primary }]}><Text style={styles.confirmText}>Confirm & Share Image</Text></Pressable></View></View></Modal></ScreenContainer>;
+}
+const styles = StyleSheet.create({ content: { paddingTop: 24, paddingBottom: 42 }, shareCanvas: { paddingBottom: 5 }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 2.1, marginBottom: 8 }, title: { fontSize: 30, fontWeight: "700", letterSpacing: -0.7 }, subtitle: { fontSize: 14, lineHeight: 20, marginTop: 6, marginBottom: 15 }, shareButton: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" }, filterLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginTop: 7, marginBottom: 7 }, filters: { gap: 8, paddingBottom: 5 }, row: { flexDirection: "row", gap: 8, paddingBottom: 5 }, filter: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20, borderWidth: 1 }, hero: { borderRadius: 20, padding: 19, marginTop: 13, marginBottom: 28 }, heroTop: { flexDirection: "row", justifyContent: "space-between" }, heroLabel: { color: "#B5CAC6", fontSize: 10, fontWeight: "800", letterSpacing: 1.3 }, heroNumber: { color: "#FFF", fontSize: 42, lineHeight: 49, fontWeight: "700", marginTop: 6 }, heroIcon: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, heroBody: { color: "#C8D7D4", fontSize: 13, marginTop: 10 }, heroQuote: { fontSize: 13, lineHeight: 18, marginTop: 12, fontStyle: "italic" }, heroTrack: { height: 6, backgroundColor: "#36504D", borderRadius: 3, marginTop: 18, overflow: "hidden" }, heroFill: { height: 6, borderRadius: 3 }, chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }, sectionTitle: { fontSize: 18, fontWeight: "700" }, sectionMeta: { fontSize: 12 }, chart: { height: 214, borderRadius: 18, borderWidth: 1, padding: 18, marginBottom: 24 }, bars: { flex: 1, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }, barGroup: { flex: 1, height: "100%", alignItems: "center", justifyContent: "flex-end" }, barTrack: { height: "82%", width: "72%", justifyContent: "flex-end", backgroundColor: "#F0F4F2", borderRadius: 8, overflow: "hidden" }, bar: { width: "100%", borderRadius: 8, minHeight: 7 }, barLabel: { fontSize: 11, fontWeight: "700", marginTop: 9 }, breakdown: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 17 }, breakRow: { flexDirection: "row", alignItems: "center", gap: 10 }, level: { width: 57, fontSize: 12, fontWeight: "700" }, breakTrack: { flex: 1, height: 9, borderRadius: 5, backgroundColor: "#EDF2F0", overflow: "hidden" }, breakFill: { height: "100%", borderRadius: 5 }, breakRate: { width: 36, textAlign: "right", fontSize: 12, fontWeight: "700" }, shareHint: { textAlign: "center", fontSize: 11, marginTop: 12 }, toast: { position: "absolute", bottom: 82, alignSelf: "center", paddingHorizontal: 16, paddingVertical: 11, borderRadius: 18, flexDirection: "row", alignItems: "center", gap: 8 }, toastText: { color: "#FFF", fontWeight: "700", fontSize: 12 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(15,27,30,.56)", justifyContent: "flex-end" }, modalCard: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 34 }, modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }, modalTitle: { fontSize: 20, fontWeight: "700" }, previewFrame: { height: 160, borderRadius: 18, backgroundColor: "#F5F1E7", padding: 18, marginBottom: 16, overflow: "hidden" }, previewBrand: { fontSize: 11, fontWeight: "800", letterSpacing: 2 }, previewRate: { fontSize: 40, fontWeight: "800", marginTop: 20 }, previewCopy: { fontSize: 12, marginTop: 2 }, previewQuote: { fontSize: 12, fontStyle: "italic", marginTop: 9 }, previewStripe: { position: "absolute", left: 0, right: 0, bottom: 0, height: 8 }, quoteInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 7 }, confirm: { alignItems: "center", borderRadius: 15, paddingVertical: 14, marginTop: 15 }, confirmText: { color: "#FFF", fontWeight: "800" }, zoomRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 8 }, zoomButton: { width: 28, height: 28, borderRadius: 9, borderWidth: 1, borderColor: "#D7E0DE", alignItems: "center", justifyContent: "center" }, zoomValue: { width: 42, textAlign: "center", fontSize: 12, fontWeight: "700" }, quoteActions: { flexDirection: "row", marginBottom: 8 }, aiButton: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 7 }, aiText: { color: "#FFF", fontSize: 12, fontWeight: "800" } });
+
+
+
+====================================================
+== app/(tabs)/review.tsx
+====================================================
+
+// MERGED (round 2) â€” base is the "d_full" build's rewrite of this screen,
+// which fixed a real bug: this tab previously showed hardcoded demo data
+// instead of the actual day's commitments. The only change here is
+// switching the checkpoint acknowledge wiring from a boolean `acknowledged`
+// field + a separate `acknowledge` mutation to the merged status-enum model
+// (`item.status !== "acknowledged"` / `checkpoints.update.mutate({ id, status })`),
+// matching schema.ts and routers.ts in this package. See MERGE-NOTES.md.
+
+import { useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
+import { cloudRowToCommitment, mergeCommitments, type SyncableCommitment } from "@/lib/commitment-sync";
+import { trpc } from "@/lib/trpc";
+
+// Mirrors the shape owned by app/(tabs)/index.tsx and the same AsyncStorage
+// key, since both screens read/write the same on-device commitment list.
+const STORAGE_KEY = "deagle-commitments-v1";
+
+type CommitmentStatus = "active" | "completed" | "rescheduled" | "missed";
+type RiskState = "stable" | "at_risk" | "rescued" | "missed";
+// Tier 3 #11 â€” was its own near-duplicate type with no scheduledDate at
+// all, same as index.tsx before this fix (see FIXES-LOG.md). Reusing
+// SyncableCommitment directly here instead of maintaining two shapes.
+type ReviewCommitment = SyncableCommitment;
+
+function checkpointCopy(stage: "day_before" | "three_hours") {
+  return stage === "day_before" ? "One day before" : "Three hours before";
+}
+
+export default function ReviewScreen() {
+  const colors = useColors();
+  const { isAuthenticated } = useAuth();
+  const [commitments, setCommitments] = useState<ReviewCommitment[]>([]);
+  const [pendingReschedule, setPendingReschedule] = useState<string | null>(null);
+  // Consistency fix found while working on loading states: applyStatus
+  // below had the same silent-failure gap that index.tsx's update() had
+  // before Tier 1 #1 â€” a status change made from Review could fail to
+  // sync with no feedback at all. Small, local fix rather than full parity
+  // with index.tsx's per-item syncFailed badge, since this screen is
+  // transient by design.
+  const [syncNotice, setSyncNotice] = useState("");
+
+  const cloudCommitments = trpc.commitments.list.useQuery(undefined, { enabled: isAuthenticated });
+  const updateCloudCommitment = trpc.commitments.update.useMutation();
+  const checkpoints = trpc.checkpoints.list.useQuery(undefined, { enabled: isAuthenticated });
+  const updateCheckpoint = trpc.checkpoints.update.useMutation({ onSuccess: () => checkpoints.refetch() });
+
+  // Re-read on every tab focus (Tabs keep screens mounted, so a mount-only
+  // effect would miss changes made from the Today tab in the same session).
+  useFocusEffect(useCallback(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((stored) => { if (stored) { try { setCommitments(JSON.parse(stored)); } catch { /* ignore malformed cache */ } } });
+  }, []));
+
+  useFocusEffect(useCallback(() => {
+    if (isAuthenticated && cloudCommitments.data) {
+      setCommitments((current) => mergeCommitments(current, cloudCommitments.data));
+    }
+  }, [isAuthenticated, cloudCommitments.data]));
+
+  const persist = (next: ReviewCommitment[]) => { setCommitments(next); AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => undefined); };
+
+  const applyStatus = (id: string, status: CommitmentStatus, riskState: RiskState) => {
+    persist(commitments.map((item) => (item.id === id ? { ...item, status, riskState } : item)));
+    if (isAuthenticated && /^\d+$/.test(id)) {
+      updateCloudCommitment.mutate(
+        { id: Number(id), status, riskState },
+        { onError: () => { setSyncNotice("Couldn't sync that to the cloud â€” it's saved on this device and Eagle will retry next time Today refreshes."); setTimeout(() => setSyncNotice(""), 4200); } }
+      );
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const markCompleted = (id: string) => applyStatus(id, "completed", "stable");
+  const markMissed = (id: string) => { setPendingReschedule(id); };
+  const confirmReschedule = (moveToTomorrow: boolean) => {
+    if (pendingReschedule) applyStatus(pendingReschedule, moveToTomorrow ? "rescheduled" : "missed", moveToTomorrow ? "rescued" : "missed");
+    setPendingReschedule(null);
+  };
+
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayCommitments = useMemo(() => commitments.filter((c) => c.scheduledDate === todayKey), [commitments, todayKey]);
+  const buckets = useMemo(() => ({
+    open: todayCommitments.filter((c) => c.status === "active"),
+    completed: todayCommitments.filter((c) => c.status === "completed"),
+    rescheduled: todayCommitments.filter((c) => c.status === "rescheduled"),
+    missed: todayCommitments.filter((c) => c.status === "missed"),
+  }), [todayCommitments]);
+
+  // Tier 3 #11 â€” the history view. Everything that isn't today, grouped by
+  // date and sorted most-recent-first. Kept to a simple expandable list
+  // (one date open at a time) rather than a full calendar picker, matching
+  // this product's own "silence is a feature" / progressive-disclosure
+  // instinct rather than adding a new screen's worth of chrome.
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const pastDays = useMemo(() => {
+    const groups = new Map<string, ReviewCommitment[]>();
+    for (const item of commitments) {
+      if (item.scheduledDate === todayKey) continue;
+      const list = groups.get(item.scheduledDate) ?? [];
+      list.push(item);
+      groups.set(item.scheduledDate, list);
+    }
+    return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14); // last two weeks of history is plenty for a "what happened recently" view
+  }, [commitments, todayKey]);
+
+  const openCheckpoints = useMemo(() => (checkpoints.data ?? []).filter((item) => item.status !== "acknowledged").sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()), [checkpoints.data]);
+  const pendingItem = commitments.find((c) => c.id === pendingReschedule);
+
+  return <ScreenContainer className="px-5" containerClassName="bg-background"><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <Text style={[styles.eyebrow, { color: colors.primary }]}>NIGHTLY REVIEW</Text>
+    <Text style={[styles.title, { color: colors.foreground }]}>Close the loop.</Text>
+    <Text style={[styles.subtitle, { color: colors.muted }]}>A two-minute reset so tomorrow starts lighter.</Text>
+    <View style={[styles.prompt, { backgroundColor: colors.foreground }]}><Ionicons name="moon" size={21} color="#F4B942" /><Text style={styles.promptText}>Anything unmarked by midnight becomes missed. Eagle will help you carry forward what matters.</Text></View>
+    {syncNotice ? <View style={{ flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#FCE5E0", borderRadius: 12, padding: 10, marginBottom: 16 }}><Ionicons name="cloud-offline-outline" size={15} color="#E87561" /><Text style={{ flex: 1, fontSize: 11, color: "#9B4A3D" }}>{syncNotice}</Text></View> : null}
+
+    {buckets.open.length > 0 && <View style={styles.bucketSection}>
+      <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#E9EFEC" }]}><Ionicons name="ellipse-outline" size={17} color={colors.muted} /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Still open</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{buckets.open.length}</Text></View>
+      {buckets.open.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+        <Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text>
+        <View style={styles.itemActions}>
+          <Pressable accessibilityLabel="Mark completed" onPress={() => markCompleted(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#0B6E69" }, pressed && styles.pressed]}><Ionicons name="checkmark" size={15} color="#FFFFFF" /></Pressable>
+          <Pressable accessibilityLabel="Mark missed" onPress={() => markMissed(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#E87561" }, pressed && styles.pressed]}><Ionicons name="close" size={15} color="#FFFFFF" /></Pressable>
+        </View>
+      </View>)}
+    </View>}
+
+    {(["completed", "rescheduled", "missed"] as const).map((bucket) => {
+      const items = buckets[bucket];
+      if (items.length === 0) return null;
+      const meta = bucket === "completed" ? { label: "Completed", bg: "#DDEDEA", icon: "checkmark-circle" as const, color: "#0B6E69" } : bucket === "rescheduled" ? { label: "Rescheduled", bg: "#FFF4D9", icon: "time" as const, color: "#F4B942" } : { label: "Missed", bg: "#FCE5E0", icon: "close-circle" as const, color: "#E87561" };
+      return <View key={bucket} style={styles.bucketSection}>
+        <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: meta.bg }]}><Ionicons name={meta.icon} size={18} color={meta.color} /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>{meta.label}</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{items.length}</Text></View>
+        {items.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface }]}><Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text><Ionicons name={meta.icon} size={18} color={meta.color} /></View>)}
+      </View>;
+    })}
+
+    {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={{ alignItems: "center", paddingVertical: 24 }}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyCheckpoints, { color: colors.muted, marginTop: 10 }]}>Loading today's reviewâ€¦</Text></View>}
+    {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && todayCommitments.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing captured for today yet â€” head to the Today tab.</Text>}
+
+    {isAuthenticated && <View style={styles.bucketSection}>
+      <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#FCE5E0" }]}><Ionicons name="flag" size={17} color="#E87561" /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Critical checkpoints</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{openCheckpoints.length}</Text></View>
+      {openCheckpoints.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing waiting on a "don't let me forget" checkpoint right now.</Text>}
+      {openCheckpoints.map((checkpoint) => <View key={checkpoint.id} style={[styles.checkpointItem, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+        <View style={styles.checkpointCopy}>
+          <Text style={[styles.checkpointStage, { color: "#9B6A00" }]}>{checkpointCopy(checkpoint.stage)}</Text>
+          <Text style={[styles.checkpointDue, { color: colors.muted }]}>Due {new Date(checkpoint.dueAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</Text>
+        </View>
+        <Pressable accessibilityLabel="Acknowledge checkpoint" onPress={() => updateCheckpoint.mutate({ id: checkpoint.id, status: "acknowledged" })} style={({ pressed }) => [styles.ackButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="checkmark" size={15} color="#FFFFFF" /></Pressable>
+      </View>)}
+    </View>}
+
+    {pastDays.length > 0 && <View style={styles.bucketSection}>
+      <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#E9EFEC" }]}><Ionicons name="time-outline" size={17} color={colors.muted} /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Past days</Text></View>
+      {pastDays.map(([date, items]) => {
+        const completedCount = items.filter((i) => i.status === "completed").length;
+        const missedCount = items.filter((i) => i.status === "missed").length;
+        const isOpen = expandedDate === date;
+        return <View key={date}>
+          <Pressable onPress={() => setExpandedDate(isOpen ? null : date)} style={({ pressed }) => [styles.item, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+            <Text style={[styles.itemText, { color: colors.foreground }]}>{new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginRight: 8 }}>{completedCount} done Â· {missedCount} missed</Text>
+            <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
+          </Pressable>
+          {isOpen && items.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface, marginLeft: 14 }]}>
+            <Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text>
+            <Ionicons name={item.status === "completed" ? "checkmark-circle" : item.status === "missed" ? "close-circle" : "time"} size={16} color={item.status === "completed" ? "#0B6E69" : item.status === "missed" ? "#E87561" : "#F4B942"} />
+          </View>)}
+        </View>;
+      })}
+    </View>}
+
+    {pendingItem && <View style={[styles.ask, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      <Text style={[styles.askEyebrow, { color: colors.primary }]}>EAGLE ASKS</Text>
+      <Text style={[styles.askTitle, { color: colors.foreground }]}>Would you like to move "{pendingItem.title}" to tomorrow?</Text>
+      <View style={styles.askActions}>
+        <Pressable onPress={() => confirmReschedule(true)} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.buttonText}>Yes, move it</Text></Pressable>
+        <Pressable onPress={() => confirmReschedule(false)} style={styles.laterAction}><Text style={[styles.laterText, { color: colors.muted }]}>No, leave it missed</Text></Pressable>
+      </View>
+    </View>}
+  </ScrollView></ScreenContainer>;
+}
+const styles = StyleSheet.create({ content: { paddingTop: 24, paddingBottom: 40 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 2.1, marginBottom: 8 }, title: { fontSize: 30, fontWeight: "700", letterSpacing: -0.7 }, subtitle: { fontSize: 14, marginTop: 6, marginBottom: 22 }, prompt: { borderRadius: 18, padding: 16, flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 28 }, promptText: { flex: 1, color: "#D9E4E1", fontSize: 13, lineHeight: 19 }, bucketSection: { marginBottom: 22 }, bucketHeader: { flexDirection: "row", alignItems: "center", marginBottom: 10 }, bucketIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 }, bucketTitle: { fontSize: 16, fontWeight: "700", flex: 1 }, bucketCount: { fontSize: 13, fontWeight: "700" }, item: { minHeight: 52, borderRadius: 13, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 7 }, itemText: { flex: 1, fontSize: 13, fontWeight: "600" }, itemActions: { flexDirection: "row", gap: 6 }, markButton: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center" }, emptyCheckpoints: { fontSize: 12, lineHeight: 17, marginBottom: 10 }, checkpointItem: { minHeight: 56, borderRadius: 13, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 7 }, checkpointCopy: { flex: 1 }, checkpointStage: { fontSize: 13, fontWeight: "700" }, checkpointDue: { fontSize: 11, marginTop: 3 }, ackButton: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" }, ask: { borderRadius: 18, borderWidth: 1, padding: 17, marginTop: 4 }, askEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }, askTitle: { fontSize: 16, lineHeight: 22, fontWeight: "700", marginTop: 9, marginBottom: 16 }, askActions: { gap: 8 }, button: { height: 47, borderRadius: 14, alignItems: "center", justifyContent: "center" }, buttonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" }, laterAction: { alignItems: "center", paddingVertical: 8 }, laterText: { fontSize: 13, fontWeight: "600" }, pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] } });
+
+
+
+
+====================================================
+== app/(tabs)/settings.tsx
+====================================================
+
+// MERGED â€” this is c_next_sequence's settings.tsx essentially as-is. Both
+// patches implemented the same "sync preferences server-side" requirement
+// independently (a genuine duplicate here, not complementary halves like
+// critical-cascade), and this one was chosen because it's already wired to
+// lib/preferences.ts â€” the module MERGE-NOTES.md picked as canonical (it
+// persists to AsyncStorage and mirrors the legacy per-key storage that
+// index.tsx/dashboard.tsx already read, which section7's equivalent
+// lib/user-preferences.ts never did). No changes needed beyond that pick.
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { startOAuthLogin } from "@/constants/oauth";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { Ionicons } from "@expo/vector-icons";
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { scheduleDailyRituals } from "@/lib/native-services";
+import { trpc } from "@/lib/trpc";
+import { DEFAULT_PREFERENCES, EaglePreferences, getLocalPreferences, mergePreferences, setLocalPreferences } from "@/lib/preferences";
+
+export default function SettingsScreen() {
+  const colors = useColors();
+  const { user, isAuthenticated, loading, logout } = useAuth();
+  const cloudPreferences = trpc.preferences.get.useQuery(undefined, { enabled: isAuthenticated });
+  const upsertPreferences = trpc.preferences.upsert.useMutation();
+  const [prefs, setPrefs] = useState<EaglePreferences>(DEFAULT_PREFERENCES);
+  const [hydrated, setHydrated] = useState(false);
+  const [picker, setPicker] = useState<"briefing" | "review" | null>(null);
+
+  useEffect(() => { getLocalPreferences().then((local) => { setPrefs(local); setHydrated(true); }); }, []);
+  useEffect(() => {
+    if (!isAuthenticated || !cloudPreferences.data) return;
+    setPrefs((current) => {
+      const merged = mergePreferences(current, cloudPreferences.data);
+      setLocalPreferences(merged).catch(() => undefined);
+      return merged;
+    });
+  }, [isAuthenticated, cloudPreferences.data]);
+
+  const savePrefs = async (patch: Partial<EaglePreferences>) => {
+    const next = await setLocalPreferences(patch);
+    setPrefs(next);
+    if (isAuthenticated) upsertPreferences.mutate(patch);
+    return next;
+  };
+
+  const saveTimes = async (nextBriefing: number, nextReview: number) => { await savePrefs({ briefingHour: nextBriefing, reviewHour: nextReview }); await scheduleDailyRituals(nextBriefing, nextReview); };
+
+  if (!hydrated) return <ScreenContainer className="px-5" containerClassName="bg-background"><View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.primary} /></View></ScreenContainer>;
+
+  return <ScreenContainer className="px-5" containerClassName="bg-background"><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <Text style={[styles.eyebrow, { color: colors.primary }]}>PROFILE & SETTINGS</Text><Text style={[styles.title, { color: colors.foreground }]}>Make Eagle fit you.</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Quiet by default. Present when it counts.</Text>
+    <View style={[styles.profileCard, { backgroundColor: colors.foreground }]}><View style={styles.profileAvatar}><Text style={styles.profileInitial}>{user?.name?.charAt(0) ?? "A"}</Text></View><View><Text style={styles.profileName}>{user?.name ?? "Guest mode"}</Text><Text style={styles.profileEmail}>{user?.email ?? (isAuthenticated ? "Synced across devices" : "Sign in to sync across devices")}</Text></View><Ionicons name="chevron-forward" size={18} color="#B5CAC6" style={styles.profileChevron} /></View>
+    {!loading && !isAuthenticated && <Pressable onPress={() => startOAuthLogin()} style={({ pressed }) => [styles.signIn, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="lock-closed" size={16} color="#FFFFFF" /><Text style={styles.signInText}>Securely sign in with Manus</Text></Pressable>}
+    <Text style={[styles.sectionLabel, { color: colors.muted }]}>DAILY RITUAL</Text><View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}><TimeSettingRow icon="sunny-outline" label="Morning briefing" hour={prefs.briefingHour} onPress={() => setPicker("briefing")} colors={colors} /><View style={[styles.divider, { backgroundColor: colors.border }]} /><TimeSettingRow icon="moon-outline" label="Nightly review" hour={prefs.reviewHour} onPress={() => setPicker("review")} colors={colors} /></View>
+    <Text style={[styles.sectionLabel, { color: colors.muted }]}>NOTIFICATIONS</Text><View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}><ToggleRow icon="notifications-outline" label="Standard reminders" value={prefs.notificationsEnabled} onValueChange={(value) => savePrefs({ notificationsEnabled: value })} colors={colors} /><View style={[styles.divider, { backgroundColor: colors.border }]} /><ToggleRow icon="volume-high-outline" label="Eagle voice alerts" value={prefs.voiceEnabled} onValueChange={(value) => savePrefs({ voiceEnabled: value })} colors={colors} /><View style={[styles.divider, { backgroundColor: colors.border }]} /><ToggleRow icon="musical-note-outline" label="Meeting countdown chime" value={!prefs.meetingChimeMuted} onValueChange={(value) => savePrefs({ meetingChimeMuted: !value })} colors={colors} /><View style={[styles.divider, { backgroundColor: colors.border }]} /><ToggleRow icon="alarm-outline" label="Five-minute meeting warning" value={!prefs.earlyWarningMuted} onValueChange={(value) => savePrefs({ earlyWarningMuted: !value })} colors={colors} /></View>
+    <Text style={[styles.sectionLabel, { color: colors.muted }]}>REGION</Text><View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}><SettingRow icon="globe-outline" label="Timezone" value="Local time" colors={colors} /><View style={[styles.divider, { backgroundColor: colors.border }]} /><SettingRow icon="language-outline" label="Language" value="English" colors={colors} /></View>
+    <Text style={[styles.sectionLabel, { color: colors.muted }]}>HELP</Text><View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable onPress={() => { AsyncStorage.setItem("deagle-onboarded-v1", "").then(() => Alert.alert("Intro reset", "Head back to Today â€” the introduction will show again.")); }} style={({ pressed }) => [styles.row, pressed && styles.pressed]}><Ionicons name="sparkles-outline" size={19} color={colors.primary} /><Text style={[styles.rowLabel, { color: colors.foreground }]}>Show the intro again</Text><Ionicons name="chevron-forward" size={16} color={colors.muted} /></Pressable></View>
+    <Text style={[styles.syncNote, { color: colors.muted }]}>{isAuthenticated ? "These preferences sync to your account and follow you across devices." : "Sign in to keep these preferences in sync across devices."}</Text>
+    {picker && <DateTimePicker value={new Date(2020, 0, 1, picker === "briefing" ? prefs.briefingHour : prefs.reviewHour, 0)} mode="time" display={Platform.OS === "ios" ? "spinner" : "default"} onChange={(event: DateTimePickerEvent, selectedDate?: Date) => { if (Platform.OS !== "ios") setPicker(null); if (selectedDate) { const nextHour = selectedDate.getHours(); saveTimes(picker === "briefing" ? nextHour : prefs.briefingHour, picker === "review" ? nextHour : prefs.reviewHour); } }} />}
+    {isAuthenticated && <Pressable onPress={logout} style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}><Text style={{ color: "#E87561", fontWeight: "700", fontSize: 14 }}>Sign out</Text></Pressable>}
+  </ScrollView></ScreenContainer>;
+}
+function SettingRow({ icon, label, value, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; colors: ReturnType<typeof useColors> }) { return <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]}><Ionicons name={icon} size={19} color={colors.primary} /><Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text><Text style={[styles.rowValue, { color: colors.muted }]}>{value}</Text><Ionicons name="chevron-forward" size={16} color={colors.muted} /></Pressable>; }
+function TimeSettingRow({ icon, label, hour, onPress, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; hour: number; onPress: () => void; colors: ReturnType<typeof useColors> }) { const displayHour = hour % 12 || 12; const suffix = hour >= 12 ? "PM" : "AM"; return <Pressable accessibilityLabel={`Set ${label} time`} onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}><Ionicons name={icon} size={19} color={colors.primary} /><Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text><Text style={[styles.rowValue, { color: colors.muted }]}>{displayHour}:00 {suffix}</Text><Ionicons name="chevron-forward" size={16} color={colors.muted} /></Pressable>; }
+function ToggleRow({ icon, label, value, onValueChange, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: boolean; onValueChange: (value: boolean) => void; colors: ReturnType<typeof useColors> }) { return <View style={styles.row}><Ionicons name={icon} size={19} color={colors.primary} /><Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text><Switch value={value} onValueChange={onValueChange} trackColor={{ false: colors.border, true: colors.primary }} thumbColor="#FFFFFF" /></View>; }
+const styles = StyleSheet.create({ content: { paddingTop: 24, paddingBottom: 40 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 2.1, marginBottom: 8 }, title: { fontSize: 30, fontWeight: "700", letterSpacing: -0.7 }, subtitle: { fontSize: 14, marginTop: 6, marginBottom: 22 }, profileCard: { borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", marginBottom: 28 }, profileAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#F4B942", alignItems: "center", justifyContent: "center", marginRight: 12 }, profileInitial: { color: "#10242A", fontWeight: "800", fontSize: 16 }, profileName: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 }, profileEmail: { color: "#B5CAC6", fontSize: 12, marginTop: 3 }, profileChevron: { marginLeft: "auto" }, sectionLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 9 }, group: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, marginBottom: 24 }, row: { minHeight: 54, flexDirection: "row", alignItems: "center" }, rowLabel: { flex: 1, marginLeft: 11, fontSize: 14, fontWeight: "600" }, rowValue: { fontSize: 13, marginRight: 8 }, timeButton: { width: 24, height: 24, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "#E9EFEC", marginHorizontal: 3 }, divider: { height: 1 }, syncNote: { fontSize: 11, lineHeight: 16, marginTop: -10, marginBottom: 20 }, signOut: { alignItems: "center", paddingVertical: 18 }, signIn: { height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginBottom: 22 }, signInText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 }, pressed: { opacity: 0.72 } });
+
+
+
+====================================================
+== Current server folder tree
+====================================================
+
+
+FullName                                       Length
+--------                                       ------
+C:\Dev\d-eagle-hub\server\db.ownership.test.ts   8076
+C:\Dev\d-eagle-hub\server\db.ts                 13603
+C:\Dev\d-eagle-hub\server\logger.ts              1217
+C:\Dev\d-eagle-hub\server\pushDelivery.ts        3889
+C:\Dev\d-eagle-hub\server\pushJob.ts             3062
+C:\Dev\d-eagle-hub\server\pushSchedule.test.ts   4320
+C:\Dev\d-eagle-hub\server\pushSchedule.ts        3455
+C:\Dev\d-eagle-hub\server\rateLimit.ts           2397
+C:\Dev\d-eagle-hub\server\routers.ts             9575
+
+
+
+
+
+====================================================
+== Missing core files check
+====================================================
+
+[MISSING] server\_core\env.ts [MISSING] server\_core\trpc.ts [MISSING] server\_core\cookies.ts [MISSING] server\_core\systemRouter.ts [MISSING] server\_core\llm.ts [MISSING] shared\const.ts
+
+
+====================================================
+== TypeScript errors only
+====================================================
+
+
+app/(tabs)/_layout.tsx(12,131): error TS2322: Type '(props: BottomTabBarButtonProps) => Element' is not assignable to type '(props: BottomTabBarButtonProps) => ReactNode'.
+app/(tabs)/dashboard.tsx(18,89): error TS2339: Property 'snapshots' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'snapshots' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/dashboard.tsx(18,182): error TS2339: Property 'quotes' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides 
+with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'quotes' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/dashboard.tsx(21,72): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(22,84): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(22,117): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(23,52): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(24,282): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(26,109): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(26,220): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(26,225): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(26,282): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(26,287): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(27,82): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(27,142): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(27,147): error TS7006: Parameter 'x' implicitly has an 'any' type.
+app/(tabs)/dashboard.tsx(27,286): error TS2571: Object is of type 'unknown'.
+app/(tabs)/dashboard.tsx(27,293): error TS2571: Object is of type 'unknown'.
+app/(tabs)/dashboard.tsx(31,1170): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+app/(tabs)/dashboard.tsx(31,1208): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'SetStateAction<string>'.
+app/(tabs)/dashboard.tsx(31,1441): error TS2769: No overload matches this call.
+app/(tabs)/index.tsx(119,33): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(120,38): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(121,38): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(122,38): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(123,29): error TS2339: Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with 
+a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(124,34): error TS2339: Property 'notifications' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'notifications' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(156,36): error TS2339: Property 'snapshots' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides 
+with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'snapshots' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(182,38): error TS2339: Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/index.tsx(239,52): error TS2345: Argument of type 'Commitment[]' is not assignable to parameter of type 'SyncableCommitment[]'.
+app/(tabs)/index.tsx(388,25): error TS7006: Parameter 'serverId' implicitly has an 'any' type.
+app/(tabs)/index.tsx(406,23): error TS7006: Parameter 'serverId' implicitly has an 'any' type.
+app/(tabs)/index.tsx(465,21): error TS7006: Parameter 'serverId' implicitly has an 'any' type.
+app/(tabs)/review.tsx(49,33): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/review.tsx(50,38): error TS2339: Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'commitments' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/review.tsx(51,28): error TS2339: Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/review.tsx(52,33): error TS2339: Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'checkpoints' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/review.tsx(112,74): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/(tabs)/review.tsx(112,121): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/(tabs)/review.tsx(112,124): error TS7006: Parameter 'b' implicitly has an 'any' type.
+app/(tabs)/review.tsx(149,29): error TS7006: Parameter 'checkpoint' implicitly has an 'any' type.
+app/(tabs)/settings.tsx(26,33): error TS2339: Property 'preferences' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'preferences' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/(tabs)/settings.tsx(27,34): error TS2339: Property 'preferences' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router 
+collides with a built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'preferences' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/_layout.tsx(10,22): error TS2339: Property 'useUtils' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'useUtils' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/_layout.tsx(30,11): error TS2339: Property 'Provider' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'Provider' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+app/_layout.tsx(39,12): error TS2339: Property 'Provider' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'Provider' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+components/ExternalLink.tsx(11,7): error TS2322: Type 'string' is not assignable to type '"/" | "/review" | RelativePathString | ExternalPathString | "/modal" | `/modal?${string}` | `/modal#${string}` | "/_sitemap" | `/_sitemap?${string}` | `/_sitemap#${string}` | 
+"/(tabs)" | ... 39 more ... | { ...; }'.
+components/haptic-tab.tsx(7,6): error TS2322: Type '{ onPressIn: (ev: GestureResponderEvent) => void; id?: string | undefined; role?: Role | undefined; key?: Key | null | undefined; children: (((string | ... 7 more ... | ((state: PressableStateCallbackType) => 
+ReactNode)) & (string | ... 6 more ... | Promise<...>)) & (string | ... 6 more ... | Promise<...>)) | null |...' is not assignable to type 'RefAttributes<View>'.
+components/ui/icon-symbol.tsx(8,27): error TS2344: Type 'SFSymbols7_0 | { ios?: SFSymbols7_0 | undefined; android?: "function" | "light" | "ios" | "android" | "web" | "search" | "repeat" | "anchor" | "link" | ... 4046 more ... | undefined; web?: "function" | ... 
+4054 more ... | undefined; }' does not satisfy the constraint 'string | number | symbol'.
+components/ui/icon-symbol.tsx(43,65): error TS2538: Type '{ ios?: SFSymbols7_0 | undefined; android?: "function" | "light" | "ios" | "android" | "web" | "search" | "repeat" | "anchor" | "link" | "language" | "email" | "mode" | ... 4043 more ... | undefined; web?: 
+"function" | ... 4054 more ... | undefined; }' cannot be used as an index type.
+hooks/use-auth.ts(6,22): error TS2339: Property 'useUtils' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'useUtils' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+hooks/use-auth.ts(7,24): error TS2339: Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+hooks/use-auth.ts(8,31): error TS2339: Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'auth' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+lib/trpc.ts(22,15): error TS2339: Property 'createClient' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend." | "The property 'useUtils' in your router collides with a 
+built-in method, rename this router or procedure on your backend." | "The property 'Provider' in your router collides with a built-in ...'.
+  Property 'createClient' does not exist on type '"The property 'useContext' in your router collides with a built-in method, rename this router or procedure on your backend."'.
+server/db.ts(21,21): error TS2307: Cannot find module './_core/env' or its corresponding type declarations.
+server/rateLimit.ts(18,36): error TS2307: Cannot find module './_core/trpc' or its corresponding type declarations.
+server/rateLimit.ts(37,42): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/rateLimit.ts(37,47): error TS7031: Binding element 'next' implicitly has an 'any' type.
+server/routers.ts(9,29): error TS2307: Cannot find module '../shared/const' or its corresponding type declarations.
+server/routers.ts(10,41): error TS2307: Cannot find module './_core/cookies' or its corresponding type declarations.
+server/routers.ts(11,30): error TS2307: Cannot find module './_core/systemRouter' or its corresponding type declarations.
+server/routers.ts(12,61): error TS2307: Cannot find module './_core/trpc' or its corresponding type declarations.
+server/routers.ts(14,27): error TS2307: Cannot find module './_core/llm' or its corresponding type declarations.
+server/routers.ts(67,32): error TS7006: Parameter 'opts' implicitly has an 'any' type.
+server/routers.ts(68,41): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(72,180): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(72,185): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(75,247): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(78,39): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(79,263): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(79,268): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(82,39): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(83,100): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(83,105): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(90,106): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(90,111): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(101,107): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(101,112): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(104,98): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(104,103): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(105,39): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(110,138): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(110,143): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(122,187): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(122,192): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(123,146): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(123,151): error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers.ts(126,38): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(127,68): error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers.ts(127,73): error TS7031: Binding element 'input' implicitly has an 'any' type.
+
+
+
+
+
+====================================================
+== Relevant imports
+====================================================
+
+C:\Dev\d-eagle-hub\app\_layout.tsx:5: import { trpc, createTRPCClient } from "@/lib/trpc";
+C:\Dev\d-eagle-hub\app\_layout.tsx:27: const [trpcClient] = useState(() => createTRPCClient());
+C:\Dev\d-eagle-hub\lib\trpc.ts:4: import type { AppRouter } from "@/server/routers";
+C:\Dev\d-eagle-hub\lib\trpc.ts:15: export const trpc = createTRPCReact<AppRouter>();
+C:\Dev\d-eagle-hub\lib\trpc.ts:21: export function createTRPCClient() {
+C:\Dev\d-eagle-hub\server\routers.ts:9: import { COOKIE_NAME } from "../shared/const";
+C:\Dev\d-eagle-hub\server\routers.ts:64: export const appRouter = router({
+C:\Dev\d-eagle-hub\server\routers.ts:130: export type AppRouter = typeof appRouter;
+
+
+
+==================== END OF REPORT ====================
