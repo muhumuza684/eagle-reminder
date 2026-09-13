@@ -12,6 +12,10 @@ export default defineConfig({
         replacement: path.resolve(root, "test-shims/react-native.ts"),
       },
       {
+        find: "expo-crypto",
+        replacement: path.resolve(root, "test-shims/expo-crypto.ts"),
+      },
+      {
         find: "@/lib/secure-storage",
         replacement: path.resolve(root, "test-shims/secure-storage.ts"),
       },
