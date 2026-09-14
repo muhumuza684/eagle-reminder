@@ -1,4 +1,6 @@
-﻿const { app, BrowserWindow, shell, session } = require("electron");
+const { app, BrowserWindow, shell, session } = require("electron");
+
+const TRUSTED_ORIGINS = new Set(["file:"]);
 const path = require("node:path");
 
 let mainWindow;
@@ -23,8 +25,12 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "..", "web-build", "index.html"));
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    try { const parsed = new URL(url); if (parsed.protocol === "https:") void shell.openExternal(parsed.toString()); } catch {}
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("file:")) event.preventDefault();
   });
 
   mainWindow.on("closed", () => {

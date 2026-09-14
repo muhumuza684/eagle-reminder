@@ -15,6 +15,7 @@ import { invokeLLM } from "./_core/llm";
 import { buildCriticalCheckpoints } from "../lib/critical-cascade";
 import { rateLimited } from "./rateLimit";
 import { log } from "./logger";
+import { sanitizePlainText } from "../lib/security/input-policy";
 
 const commitmentInput = z.object({
   title: z.string().min(1).max(255),
@@ -82,7 +83,8 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) => db.getUserCommitments(ctx.user.id)),
     create: rateLimited("commitments.create", 40, 60_000).input(commitmentInput).mutation(async ({ ctx, input }) => {
       const { criticalDeadline, ...rest } = input;
-      const id = await db.createCommitment({ userId: ctx.user.id, ...rest, criticalDeadline: criticalDeadline ? new Date(criticalDeadline) : undefined });
+      const safeRest = { ...rest, title: sanitizePlainText(rest.title), category: sanitizePlainText(rest.category, 64) };
+      const id = await db.createCommitment({ userId: ctx.user.id, ...safeRest, criticalDeadline: criticalDeadline ? new Date(criticalDeadline) : undefined });
       if (input.critical && criticalDeadline) await db.replaceCriticalCheckpoints(ctx.user.id, id, computeCheckpointRows(new Date(criticalDeadline)));
       log({ event: "commitment.created", level: "info", userId: ctx.user.id, commitmentId: id, critical: input.critical });
       return id;
