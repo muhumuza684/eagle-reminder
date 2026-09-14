@@ -6,6 +6,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { AuthGate } from "@/components/auth-gate";
 import { completeOAuthFromUrl } from "@/lib/_core/auth";
+import { useFonts } from "expo-font";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 function DeepLinkAuthListener() {
   const utils = trpc.useUtils();
@@ -26,6 +28,7 @@ function DeepLinkAuthListener() {
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   const [trpcClient] = useState(() => createTRPCClient());
+  useFonts({ ...MaterialIcons.font });
 
   return (
     <SafeAreaProvider>

@@ -1,10 +1,11 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Platform, useWindowDimensions } from "react-native";
+import { Platform } from "react-native";
 import { HapticTab } from "@/components/haptic-tab";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { spacing } from "@/constants/spacing";
+import { useLayoutWidth } from "@/hooks/use-layout-width";
 
 // Desktop/wide breakpoint. Below this, bottom tabs (mobile pattern).
 // At or above it, the same tab bar becomes a left sidebar — same
@@ -14,7 +15,7 @@ const SIDEBAR_BREAKPOINT = 900;
 export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const width = useLayoutWidth();
   const isSidebar = width >= SIDEBAR_BREAKPOINT;
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
 
