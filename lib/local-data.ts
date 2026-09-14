@@ -1,6 +1,6 @@
-﻿import AsyncStorage from "@/lib/secure-storage";
+import AsyncStorage from "@/lib/secure-storage";
 
-const EXPORT_VERSION = 1;
+const EXPORT_VERSION = 2;
 
 export type LocalBackup = {
   app: "d-eagle-hub";
@@ -39,6 +39,7 @@ export async function importLocalData(json: string): Promise<number> {
 
   if (
     !parsed ||
+    parsed.version !== EXPORT_VERSION ||
     parsed.app !== "d-eagle-hub" ||
     typeof parsed.values !== "object" ||
     parsed.values === null
