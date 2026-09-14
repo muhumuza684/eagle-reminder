@@ -35,6 +35,7 @@ export default function RootLayout() {
           <AuthGate>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="about" options={{ title: "About", headerShown: true }} />
             </Stack>
           </AuthGate>
         </QueryClientProvider>
