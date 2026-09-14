@@ -1,0 +1,2 @@
+import { describe, expect, it } from "vitest"; import { predictMissRisk } from "./predict";
+describe("Eagle prediction",()=>{it("is deterministic for the same evidence",()=>{const a=predictMissRisk({priority:"high",overdue:false,historicalMissRate:.2,minutesUntilDeadline:60},new Date("2026-01-01T00:00:00Z"));const b=predictMissRisk({priority:"high",overdue:false,historicalMissRate:.2,minutesUntilDeadline:60},new Date("2026-01-01T00:00:00Z"));expect(a).toEqual(b);});});
