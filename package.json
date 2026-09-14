@@ -62,7 +62,9 @@
     "desktop:pack": "npm run desktop:build-web; electron-builder --win portable --x64",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "validate": "npm run typecheck && npm run test"
+    "validate": "npm run typecheck && npm run test",
+    "release:gate": "node scripts/release-gate.mjs",
+    "desktop:verify": "npm run desktop:build-web"
   },
   "private": true,
   "build": {

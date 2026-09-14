@@ -23,6 +23,10 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "..", "web-build", "index.html"));
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders, "Content-Security-Policy": ["default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"] };
+    callback({ responseHeaders: headers });
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { const parsed = new URL(url); if (parsed.protocol === "https:") void shell.openExternal(parsed.toString()); } catch {}
