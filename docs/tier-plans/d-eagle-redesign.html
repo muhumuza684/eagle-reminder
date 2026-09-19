@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D-Eagle Hub — Problem statement and redesign</title>
+<style>
+  :root {
+    --bg: #FAF9F5;
+    --surface: #FFFFFF;
+    --text: #1A1915;
+    --muted: #6B6A63;
+    --line: #E3E1D8;
+    --accent: #0B6E69;
+    --accent-bg: #E1F5EE;
+    --warn: #854F0B;
+    --warn-bg: #FAEEDA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12120F;
+      --surface: #1C1C18;
+      --text: #EDECE4;
+      --muted: #9C9A90;
+      --line: #2E2E28;
+      --accent: #5DCAA5;
+      --accent-bg: #0F3A30;
+      --warn: #EF9F27;
+      --warn-bg: #3A2A0C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12120F;
+    --surface: #1C1C18;
+    --text: #EDECE4;
+    --muted: #9C9A90;
+    --line: #2E2E28;
+    --accent: #5DCAA5;
+    --accent-bg: #0F3A30;
+    --warn: #EF9F27;
+    --warn-bg: #3A2A0C;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 { font-size: 30px; font-weight: 600; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 0 0 40px; font-size: 15px; }
+  h2 {
+    font-size: 13px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--accent); margin: 48px 0 14px;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 7px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 20px 22px; margin: 18px 0;
+  }
+  .pull {
+    background: var(--accent-bg); border-radius: 12px;
+    padding: 18px 22px; margin: 18px 0; font-size: 17px;
+  }
+  .warn {
+    background: var(--warn-bg); border-radius: 12px;
+    padding: 16px 20px; margin: 18px 0; font-size: 15px; color: var(--text);
+  }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;
+    padding: 2px 9px; border-radius: 20px; background: var(--accent-bg);
+    color: var(--accent); margin-right: 6px; vertical-align: 2px;
+  }
+  .tag.paid { background: var(--warn-bg); color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 15px; display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; font-size: 13px; color: var(--muted); }
+  .muted { color: var(--muted); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 44px 0; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; background: var(--accent-bg); color: var(--accent);
+    padding: 1px 5px; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>D-Eagle Hub</h1>
+<p class="sub">Problem statement and full redesign spec · September 2026</p>
+
+<h2>The problem</h2>
+
+<p>People don't forget their commitments because they lack a place to write them down. They forget because the reminder arrived at a moment when they couldn't act on it, and they swiped it away.</p>
+
+<p>The average smartphone user receives around 46 push notifications a day. Sixty-four percent of users will delete an app that sends five or more notifications in a week. Against that wall of noise, a reminder app that simply pings at a set time is indistinguishable from spam — and gets treated as spam.</p>
+
+<p>The deeper failure is that conventional reminder apps treat every task identically. A dentist appointment and "buy milk" fire with the same sound, the same urgency, the same one-line body text. This flattens the user's sense of priority: when everything looks urgent, nothing does, and the habit of dismissing sets in.</p>
+
+<div class="pull">
+Existing reminder apps are <strong>storage</strong>. They hold the list and ping at the time you chose. Not one of them knows that <em>you personally</em> break evening commitments, or that your "Finance" tasks slip 70% of the time.
+</div>
+
+<h3>Problem statement</h3>
+
+<div class="card">
+<p style="margin:0"><strong>Adults who genuinely intend to keep their commitments still break them regularly — not from forgetfulness, but because generic, context-blind reminders are indistinguishable from notification noise and get dismissed reflexively. No widely available reminder app learns an individual's personal pattern of failure and escalates accordingly.</strong></p>
+</div>
+
+<h2>Why this doesn't compete with Google</h2>
+
+<p>Google Reminders, Apple Reminders, Todoist, and TickTick all compete on <em>capture and organization</em> — projects, tags, subtasks, collaboration, integrations. Competing there means losing: they have more engineers and deeper OS integration.</p>
+
+<p>D-Eagle Hub competes on a different axis entirely: <strong>follow-through</strong>. The product question isn't "where do I store this task?" — it's "why do I keep breaking this particular promise, and what can be done about it?"</p>
+
+<table>
+<tr><th>They do</th><th>We do</th></tr>
+<tr><td>Store and organize unlimited tasks</td><td>Cap the day at six commitments, deliberately</td></tr>
+<tr><td>Ping at the time you set</td><td>Predict which commitment is about to slip, before it does</td></tr>
+<tr><td>Treat every task the same</td><td>Escalate by personal miss-history and priority</td></tr>
+<tr><td>Cloud-first, account required</td><td>Local-first, works offline, no account needed</td></tr>
+<tr><td>Team features, projects, tags</td><td>One person, one day, one question: did you keep it?</td></tr>
+</table>
+
+<p>The six-commitment ceiling already in the app ("Six is the ceiling. Clarity is the goal.") is a genuine differentiator, not a limitation. Every competitor lets you hoard an infinite backlog. Constraining the day is the product.</p>
+
+<h2>What survives the redesign</h2>
+
+<p>This is the important reassurance: <strong>almost none of the logic gets thrown away.</strong> The existing codebase separates logic from presentation far better than a typical app, which makes a visual redesign cheap.</p>
+
+<h3>Survives untouched</h3>
+<ul>
+  <li><code>lib/intelligence/</code> — miss-risk prediction, recommendations, memory, feedback. This is the differentiator described above and is already built and tested.</li>
+  <li><code>lib/engine/</code> — statistics, optimizer, dependency graph.</li>
+  <li><code>lib/critical-cascade.ts</code> — the "Don't let me forget" checkpoint state machine and natural-language deadline parsing. Framework-free by design.</li>
+  <li><code>lib/commitment-parser.ts</code> — natural-language capture, meeting-link extraction and validation, recurrence detection.</li>
+  <li><code>lib/recurrence.ts</code>, <code>lib/weekly-snapshots.ts</code>, <code>lib/local-data.ts</code>, <code>lib/preferences.ts</code></li>
+  <li><code>server/</code> push pipeline and the GitHub Actions scheduler</li>
+  <li>All 83 passing tests</li>
+</ul>
+
+<h3>Gets rewritten</h3>
+<ul>
+  <li><code>app/(tabs)/index.tsx</code> — new layout: countdown hero, day strip, bottom sheet, capture bar</li>
+  <li><code>app/(tabs)/_layout.tsx</code> — tab bar removed</li>
+  <li><code>review.tsx</code>, <code>dashboard.tsx</code>, <code>settings.tsx</code> — become sheet contents and a modal, not tab screens</li>
+</ul>
+
+<div class="warn">
+<strong>Meeting links:</strong> the capture, validation, provider chips, five-minute warning, and <code>openMeeting</code> deep-linking all survive. What changes is placement — the URL field stays collapsed behind "Add a meeting link", and a commitment that has a link shows a small join affordance on its row. The feature isn't cut, it stops occupying the front page.
+</div>
+
+<h2>The redesign, screen by screen</h2>
+
+<h3>1 · Home — the only screen</h3>
+
+<p>One job: <em>answer "what's next and how long have I got", and let me capture something new.</em> Everything else is disclosed on demand.</p>
+
+<ul>
+  <li><strong>Day strip</strong> — seven days, today highlighted. Tap a day to see it. Replaces a month grid, which would be a second screen pretending to be a feature.</li>
+  <li><strong>Countdown hero</strong> — live time remaining until the next commitment, its title, and the Eagle risk line if one applies. Two actions: Done, Snooze.</li>
+  <li><strong>Bottom sheet</strong> — collapsed, showing a grab handle, the day's count, and a peek of the next two commitments. Dragged up: the full day, then the nightly review. Must show a visible handle and a content peek, because an invisible gesture does not exist to the user.</li>
+  <li><strong>Capture bar</strong> — persistent text field plus mic, the single accent-coloured control on the screen. This is the one primary action.</li>
+</ul>
+
+<h3>2 · Review — becomes a sheet state, not a tab</h3>
+
+<p>The nightly review is the same content and same logic, reached by dragging the sheet to full height (or by the evening notification's deep link). It isn't a place you navigate to; it's the bottom of today.</p>
+
+<h3>3 · Signal — moves behind the paywall</h3>
+
+<p>You're right that a normal daily user doesn't need it. Charts are a <em>power-user</em> surface: they reward someone with weeks of history and mean nothing on day one — which is exactly why the current build shows 0% everywhere and looks broken to a new user.</p>
+
+<p>New placement: tap the streak/count in the sheet header to open Signal as a modal. Free tier sees a single honest line ("You kept 4 of 6 commitments this week"). Full charts, category breakdown, and export become paid.</p>
+
+<h3>4 · Settings — cut to the vital</h3>
+
+<p>The current Settings screen carries eleven or more controls. A daily user needs four. Research is direct on this: a preference system is what keeps notification-fatigued users from opting out entirely — 61% keep an app whose notifications follow their settings. So notification control stays; everything else goes.</p>
+
+<table>
+<tr><th>Keep</th><th>Why</th></tr>
+<tr><td>Reminders on/off</td><td>The single highest-value control in a reminder app</td></tr>
+<tr><td>Quiet hours</td><td>Directly prevents the 2am ping that causes deletion</td></tr>
+<tr><td>Morning briefing / nightly review times</td><td>The two daily rituals the whole app is built around</td></tr>
+<tr><td>Export / import backup</td><td>Trust feature — the only protection against device loss in a local-first app</td></tr>
+</table>
+
+<table>
+<tr><th>Cut or move</th><th>Where it goes</th></tr>
+<tr><td>Eagle voice alerts</td><td>Paid tier</td></tr>
+<tr><td>Meeting countdown chime</td><td>Folds into "Reminders" — not its own toggle</td></tr>
+<tr><td>Five-minute meeting warning</td><td>Folds into "Reminders"</td></tr>
+<tr><td>Timezone</td><td>Remove — read the device. A user never wants to set this by hand.</td></tr>
+<tr><td>Language</td><td>Remove until there's a second language. A one-option picker is noise.</td></tr>
+<tr><td>Show the intro again</td><td>Move into About</td></tr>
+</table>
+
+<h3>5 · About — new</h3>
+
+<p>Reached from the avatar. Contains: one line on what Eagle is and what it does (the onboarding sentence, permanently available), the build credit — <strong>Built by AGU · Bryt Ma Tech UG</strong> — version number, replay intro, and a link to reach you. Small, quiet, and the right home for everything that doesn't belong in daily Settings.</p>
+
+<h2>Freemium split</h2>
+
+<p>Principle: <strong>the free tier must be a complete, dignified reminder app.</strong> A crippled free tier gets uninstalled before the paywall is ever reached. Paid is for depth, not for basic function.</p>
+
+<p><span class="tag">FREE</span> Unlimited capture, natural-language parsing, the six-a-day ceiling, countdown, local notifications with Done/Snooze, recurring commitments, quiet hours, nightly review, the plain-language weekly line, export/import, offline operation, no account required.</p>
+
+<p><span class="tag paid">PAID</span> Full Signal charts and history, Eagle voice alerts, lock-screen/full-screen urgent alerts, custom urgent sound, gentle escalation, home-screen widget, next-of-kin escalation.</p>
+
+<p>Note the shape of that: everything free is <em>the app working</em>. Everything paid is <em>the app trying harder</em>. That's a defensible line a user won't resent.</p>
+
+<h2>Build order</h2>
+
+<p>Suggested as Tier 19, split so each step validates independently:</p>
+
+<ul>
+  <li><strong>19a</strong> — Settings cut and About screen. Smallest, lowest risk, immediately visible.</li>
+  <li><strong>19b</strong> — Home rebuild: day strip, countdown hero, capture bar.</li>
+  <li><strong>19c</strong> — Bottom sheet, absorbing Review.</li>
+  <li><strong>19d</strong> — Remove the tab bar; wire Signal as a modal.</li>
+</ul>
+
+<p class="muted" style="margin-top:32px">Each step ends the same way as every tier before it: <code>npm run validate</code> passes, then commit.</p>
+
+</div>
+</body>
+</html>

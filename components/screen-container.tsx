@@ -14,7 +14,7 @@ const CONTENT_CLASSES: Record<string, ViewStyle> = {
   "px-5": { paddingHorizontal: 20 },
 };
 
-const MAX_CONTENT_WIDTH = 960; // was 640 — too phone-scale for a 1440px Electron window
+const MAX_CONTENT_WIDTH = 960; // wide layout threshold for tablet/web
 const WIDE_BREAKPOINT = 720;
 
 export function ScreenContainer({ children, className, containerClassName, maxWidth }: ScreenContainerProps) {

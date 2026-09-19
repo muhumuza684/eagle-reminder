@@ -20,7 +20,13 @@ export type PushCandidate = {
   notificationsEnabled: boolean | null; // falls back to true (opt-out, not opt-in, matching the client-side default)
 };
 
-export type DuePush = { tokenId: number; userId: number; token: string; kind: "briefing" | "review" };
+export type DuePush = {
+  tokenId: number;
+  userId: number;
+  token: string;
+  timezone: string;
+  kind: "briefing" | "review";
+};
 
 /**
  * The hour (0-23) it currently is in `timezone`. Falls back to UTC hour on
@@ -63,10 +69,22 @@ export function selectDuePushes(candidates: PushCandidate[], now: Date = new Dat
     const briefingHour = candidate.briefingHour ?? 8;
     const reviewHour = candidate.reviewHour ?? 22;
     if (hour === briefingHour && (!candidate.lastBriefingSentAt || localDateKey(candidate.lastBriefingSentAt, candidate.timezone) !== today)) {
-      due.push({ tokenId: candidate.tokenId, userId: candidate.userId, token: candidate.token, kind: "briefing" });
+      due.push({
+        tokenId: candidate.tokenId,
+        userId: candidate.userId,
+        token: candidate.token,
+        timezone: candidate.timezone,
+        kind: "briefing",
+      });
     }
     if (hour === reviewHour && (!candidate.lastReviewSentAt || localDateKey(candidate.lastReviewSentAt, candidate.timezone) !== today)) {
-      due.push({ tokenId: candidate.tokenId, userId: candidate.userId, token: candidate.token, kind: "review" });
+      due.push({
+        tokenId: candidate.tokenId,
+        userId: candidate.userId,
+        token: candidate.token,
+        timezone: candidate.timezone,
+        kind: "review",
+      });
     }
   }
   return due;

@@ -1,6 +1,6 @@
 {
   "name": "d-eagle-hub",
-  "main": "desktop/main.cjs",
+  "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -34,6 +34,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-get-random-values": "^2.0.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -48,49 +49,20 @@
     "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.2.2",
     "drizzle-kit": "^0.31.10",
-    "electron": "^44.3.0",
-    "electron-builder": "^26.15.3",
+    "tsx": "^4.19.2",
     "typescript": "~6.0.3",
     "vitest": "^5.0.0"
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
-    "desktop:build-web": "expo export --platform web --output-dir web-build",
-    "desktop": "npm run desktop:build-web&& electron .",
-    "desktop:pack": "npm run desktop:build-web&& electron-builder --win portable --x64",
+    "build:web": "expo export --platform web --output-dir web-build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate": "npm run typecheck && npm run test",
-    "release:gate": "node scripts/release-gate.mjs",
-    "desktop:verify": "npm run desktop:build-web"
+    "push:job": "tsx scripts/run-push-job.ts"
   },
-  "private": true,
-  "build": {
-    "appId": "com.deaglehub.desktop",
-    "productName": "D-Eagle Hub",
-    "copyright": "D-Eagle Hub",
-    "directories": {
-      "buildResources": "desktop",
-      "output": "desktop-release"
-    },
-    "files": [
-      "desktop/**/*",
-      "web-build/**/*",
-      "package.json"
-    ],
-    "asar": true,
-    "portable": {
-      "artifactName": "D-Eagle-Hub-Portable.exe"
-    },
-    "win": {
-      "target": [
-        "portable"
-      ],
-      "artifactName": "D-Eagle-Hub-Portable.exe"
-    },
-    "compression": "store"
-  }
+  "private": true
 }

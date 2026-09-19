@@ -1,5 +1,5 @@
-// MERGED — see MERGE-NOTES.md for how this combines two independent patches
-// that each solved one half of "Don't Let Me Forget" (FR-G1–FR-G4):
+﻿// MERGED â€” see MERGE-NOTES.md for how this combines two independent patches
+// that each solved one half of "Don't Let Me Forget" (FR-G1â€“FR-G4):
 //   - a_section7's lib/critical-checkpoints.ts: the checkpoint status state
 //     machine (acknowledge / escalate / expire / cascade rollup).
 //   - c_next_sequence's lib/critical-cascade.ts: natural-language deadline
@@ -13,8 +13,9 @@ export type CheckpointStatus = "pending" | "acknowledged" | "escalated" | "misse
 export type CascadeStatus = "none" | "open" | "clear" | "missed";
 
 export type Checkpoint = {
+  id?: number;
   stage: CheckpointStage;
-  dueAt: string; // ISO timestamp — string (not Date) so it round-trips through AsyncStorage/JSON untouched
+  dueAt: string; // ISO timestamp â€” string (not Date) so it round-trips through AsyncStorage/JSON untouched
   status: CheckpointStatus;
   acknowledgedAt?: string;
 };
@@ -31,7 +32,7 @@ const HOURS_BEFORE_MS = 3 * 60 * 60 * 1000;
 /**
  * Builds a commitment's ISO deadline from its scheduled date + start time.
  * Only needed as a fallback when a critical commitment has no explicit
- * `criticalDeadline` (e.g. a legacy record) — the normal capture path uses
+ * `criticalDeadline` (e.g. a legacy record) â€” the normal capture path uses
  * parseCriticalCommitment below, which produces an explicit deadline that
  * may differ from the commitment's own start time (FR-G1: "before Y" is not
  * necessarily the commitment's own scheduled time).
@@ -43,9 +44,9 @@ export function commitmentDeadlineIso(scheduledDate: string, timeStart: string):
 }
 
 /**
- * FR-G2: MVP cascade SHALL use exactly 2 checkpoints — 1 day before, and
+ * FR-G2: MVP cascade SHALL use exactly 2 checkpoints â€” 1 day before, and
  * 3 hours before the deadline. (The 4-stage cascade is FR-G2b / Phase 2 and
- * is deliberately not built here — add a new exported map instead of
+ * is deliberately not built here â€” add a new exported map instead of
  * mutating this one when that phase starts.)
  */
 export function buildCriticalCheckpoints(deadline: Date | string): Checkpoint[] {
@@ -63,7 +64,7 @@ const TIME_RE = /\b([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm)?\b/i;
 /**
  * Extracts a concrete deadline from a "before ..." clause (or the whole
  * phrase, if no "before" keyword is present). Returns ambiguous: true when
- * there isn't one explicit, parseable time — per FR-G4, the caller must ask
+ * there isn't one explicit, parseable time â€” per FR-G4, the caller must ask
  * exactly one clarifying question rather than defaulting silently.
  */
 export function parseDeadlinePhrase(text: string, now: Date = new Date()): { deadline: Date | null; ambiguous: boolean } {
@@ -107,7 +108,7 @@ export function acknowledgeCheckpoint(checkpoint: Checkpoint, at: Date = new Dat
 /**
  * FR-G3: each checkpoint requires acknowledgment; if unacknowledged by its
  * due time, escalate it (the caller uses this to trigger the voice alert).
- * Pure predicate — does not mutate.
+ * Pure predicate â€” does not mutate.
  */
 export function shouldEscalate(checkpoint: Checkpoint, now: number = Date.now()): boolean {
   return checkpoint.status === "pending" && new Date(checkpoint.dueAt).getTime() <= now;
@@ -119,7 +120,7 @@ export function escalateCheckpoint(checkpoint: Checkpoint): Checkpoint {
 
 /**
  * A checkpoint that is still open (pending or escalated) once the
- * commitment's own deadline has passed converts to "missed" — this is what
+ * commitment's own deadline has passed converts to "missed" â€” this is what
  * the Nightly Review reads to decide whether the critical cascade failed.
  */
 export function expireUnacknowledged(checkpoint: Checkpoint, deadlineIso: string, now: number = Date.now()): Checkpoint {
@@ -141,3 +142,4 @@ export function cascadeStatus(checkpoints: Checkpoint[]): CascadeStatus {
   if (checkpoints.every((checkpoint) => checkpoint.status === "acknowledged")) return "clear";
   return "open";
 }
+

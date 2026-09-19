@@ -1,36 +1,21 @@
-// MERGED — see MERGE-NOTES.md. Based on c_next_sequence's implementation:
+﻿// MERGED â€” see MERGE-NOTES.md. Based on c_next_sequence's implementation:
 // unlike a_section7's version (a pure type + merge-rule module with no
 // storage), this one actually reads/writes AsyncStorage and mirrors onto
 // the legacy single-purpose keys that index.tsx and dashboard.tsx already
-// use — which matters, because a_section7 didn't have those files and
+// use â€” which matters, because a_section7 didn't have those files and
 // would have silently orphaned the existing keys.
 //
 // One correction from a_section7's version worth keeping: shareTheme's
 // default is "Signal", matching the actual theme names defined in
-// dashboard.tsx's THEMES object (Signal / Dawn / Grove) — a_section7
+// dashboard.tsx's THEMES object (Signal / Dawn / Grove) â€” a_section7
 // guessed "classic", which isn't a real option in the app.
 
 import AsyncStorage from "@/lib/secure-storage";
+import { DEFAULT_PREFERENCES, type EaglePreferences } from "@/lib/preferences-defaults";
+export type { EaglePreferences } from "@/lib/preferences-defaults";
+export { DEFAULT_PREFERENCES } from "@/lib/preferences-defaults";
 
-export type EaglePreferences = {
-  notificationsEnabled: boolean;
-  voiceEnabled: boolean;
-  meetingChimeMuted: boolean;
-  earlyWarningMuted: boolean;
-  briefingHour: number;
-  reviewHour: number;
-  shareTheme: string;
-};
 
-export const DEFAULT_PREFERENCES: EaglePreferences = {
-  notificationsEnabled: true,
-  voiceEnabled: true,
-  meetingChimeMuted: false,
-  earlyWarningMuted: false,
-  briefingHour: 8,
-  reviewHour: 22,
-  shareTheme: "Signal",
-};
 
 export const PREFERENCES_KEY = "deagle-preferences-v1";
 
@@ -70,4 +55,6 @@ export function mergePreferences(local: EaglePreferences, cloud?: Partial<EagleP
   if (!cloud) return local;
   return { ...local, ...cloud };
 }
+
+
 

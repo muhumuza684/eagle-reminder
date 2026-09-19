@@ -1,4 +1,4 @@
-// MERGED — see MERGE-NOTES.md. Uses c_next_sequence's create/update flow
+﻿// MERGED â€” see MERGE-NOTES.md. Uses c_next_sequence's create/update flow
 // (client sends an explicit `criticalDeadline`, computed by
 // parseCriticalCommitment at capture time) combined with a_section7's
 // richer checkpoint status model (a single `status` enum, not two booleans,
@@ -67,7 +67,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => { const cookieOptions = getSessionCookieOptions(ctx.req); ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 }); return { success: true } as const; }),
-    // Tier 2 #5 — the client calls this once on launch (and whenever its
+    // Tier 2 #5 â€” the client calls this once on launch (and whenever its
     // detected zone changes) with `Intl.DateTimeFormat().resolvedOptions().timeZone`.
     // Loosely rate-limited since it should fire rarely, not on every render.
     updateLocale: rateLimited("auth.updateLocale", 10, 60_000).input(z.object({ timezone: z.string().min(1).max(64), language: z.string().min(2).max(8).optional() })).mutation(({ ctx, input }) => db.updateUserLocale(ctx.user.id, input).then(() => ({ success: true } as const))),
@@ -98,14 +98,14 @@ export const appRouter = router({
       else if (input.critical && criticalDeadline) await db.replaceCriticalCheckpoints(ctx.user.id, id, computeCheckpointRows(new Date(criticalDeadline)));
       return { success: true } as const;
     }),
-    // Tier 1 #3 — was previously impossible: a mis-capture could only ever
+    // Tier 1 #3 â€” was previously impossible: a mis-capture could only ever
     // have its status changed, never actually be removed.
     delete: rateLimited("commitments.delete", 30, 60_000).input(z.object({ id: z.number() })).mutation(({ ctx, input }) => db.deleteUserCommitment(ctx.user.id, input.id).then(() => { log({ event: "commitment.deleted", level: "info", userId: ctx.user.id, commitmentId: input.id }); return { success: true } as const; })),
   }),
   checkpoints: router({
     listForCommitment: protectedProcedure.input(z.object({ commitmentId: z.number() })).query(({ ctx, input }) => db.getCommitmentCheckpoints(ctx.user.id, input.commitmentId)),
     list: protectedProcedure.query(({ ctx }) => db.getUserCheckpoints(ctx.user.id)),
-    // Single status-transition endpoint (pending -> acknowledged / escalated / missed) —
+    // Single status-transition endpoint (pending -> acknowledged / escalated / missed) â€”
     // the client's 30s tick loop in index.tsx computes the next status locally via
     // lib/critical-cascade.ts (shouldEscalate / expireUnacknowledged) and persists the
     // result here, rather than the server owning separate acknowledge/escalate mutations.
@@ -117,7 +117,7 @@ export const appRouter = router({
       log({ event: "checkpoint.status_changed", level: input.status === "escalated" || input.status === "missed" ? "warn" : "info", userId: ctx.user.id, checkpointId: input.id, status: input.status });
     })),
   }),
-  // Tier 3 #12 — the client already fetches an Expo push token
+  // Tier 3 #12 â€” the client already fetches an Expo push token
   // (lib/native-services.ts's registerForNotifications) but had nowhere to
   // send it. This is that endpoint.
   notifications: router({
@@ -128,5 +128,8 @@ export const appRouter = router({
     get: protectedProcedure.query(({ ctx }) => db.getUserPreferences(ctx.user.id)),
     upsert: protectedProcedure.input(preferencesInput).mutation(({ ctx, input }) => db.upsertUserPreferences(ctx.user.id, input)),
   }),
+
 });
 export type AppRouter = typeof appRouter;
+
+

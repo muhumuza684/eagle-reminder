@@ -42,3 +42,5 @@ yarn-error.*
 
 # Electron build output
 desktop-release/
+
+_archive/

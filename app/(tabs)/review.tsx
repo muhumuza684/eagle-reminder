@@ -1,4 +1,4 @@
-// MERGED (round 2) — base is the "d_full" build's rewrite of this screen,
+﻿// MERGED (round 2) â€” base is the "d_full" build's rewrite of this screen,
 // which fixed a real bug: this tab previously showed hardcoded demo data
 // instead of the actual day's commitments. The only change here is
 // switching the checkpoint acknowledge wiring from a boolean `acknowledged`
@@ -14,6 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { radii } from "@/constants/radii";
+import { spacing } from "@/constants/spacing";
+import { typography } from "@/constants/typography";
 import { useAuth } from "@/hooks/use-auth";
 import { cloudRowToCommitment, mergeCommitments, type SyncableCommitment } from "@/lib/commitment-sync";
 import { trpc } from "@/lib/trpc";
@@ -24,7 +27,7 @@ const STORAGE_KEY = "deagle-commitments-v1";
 
 type CommitmentStatus = "active" | "completed" | "rescheduled" | "missed";
 type RiskState = "stable" | "at_risk" | "rescued" | "missed";
-// Tier 3 #11 — was its own near-duplicate type with no scheduledDate at
+// Tier 3 #11 â€” was its own near-duplicate type with no scheduledDate at
 // all, same as index.tsx before this fix (see FIXES-LOG.md). Reusing
 // SyncableCommitment directly here instead of maintaining two shapes.
 type ReviewCommitment = SyncableCommitment;
@@ -40,7 +43,7 @@ export default function ReviewScreen() {
   const [pendingReschedule, setPendingReschedule] = useState<string | null>(null);
   // Consistency fix found while working on loading states: applyStatus
   // below had the same silent-failure gap that index.tsx's update() had
-  // before Tier 1 #1 — a status change made from Review could fail to
+  // before Tier 1 #1 â€” a status change made from Review could fail to
   // sync with no feedback at all. Small, local fix rather than full parity
   // with index.tsx's per-item syncFailed badge, since this screen is
   // transient by design.
@@ -70,7 +73,7 @@ export default function ReviewScreen() {
     if (isAuthenticated && /^\d+$/.test(id)) {
       updateCloudCommitment.mutate(
         { id: Number(id), status, riskState },
-        { onError: () => { setSyncNotice("Couldn't sync that to the cloud — it's saved on this device and Eagle will retry next time Today refreshes."); setTimeout(() => setSyncNotice(""), 4200); } }
+        { onError: () => { setSyncNotice("Couldn't sync that to the cloud â€” it's saved on this device and Eagle will retry next time Today refreshes."); setTimeout(() => setSyncNotice(""), 4200); } }
       );
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -92,7 +95,7 @@ export default function ReviewScreen() {
     missed: todayCommitments.filter((c) => c.status === "missed"),
   }), [todayCommitments]);
 
-  // Tier 3 #11 — the history view. Everything that isn't today, grouped by
+  // Tier 3 #11 â€” the history view. Everything that isn't today, grouped by
   // date and sorted most-recent-first. Kept to a simple expandable list
   // (one date open at a time) rather than a full calendar picker, matching
   // this product's own "silence is a feature" / progressive-disclosure
@@ -140,8 +143,8 @@ export default function ReviewScreen() {
       </View>;
     })}
 
-    {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={{ alignItems: "center", paddingVertical: 24 }}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyCheckpoints, { color: colors.muted, marginTop: 10 }]}>Loading today's review…</Text></View>}
-    {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && todayCommitments.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing captured for today yet — head to the Today tab.</Text>}
+    {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={{ alignItems: "center", paddingVertical: 24 }}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyCheckpoints, { color: colors.muted, marginTop: 10 }]}>Loading today's reviewâ€¦</Text></View>}
+    {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && todayCommitments.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing captured for today yet â€” head to the Today tab.</Text>}
 
     {isAuthenticated && <View style={styles.bucketSection}>
       <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#FCE5E0" }]}><Ionicons name="flag" size={17} color="#E87561" /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Critical checkpoints</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{openCheckpoints.length}</Text></View>
@@ -164,7 +167,7 @@ export default function ReviewScreen() {
         return <View key={date}>
           <Pressable onPress={() => setExpandedDate(isOpen ? null : date)} style={({ pressed }) => [styles.item, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
             <Text style={[styles.itemText, { color: colors.foreground }]}>{new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</Text>
-            <Text style={{ fontSize: 11, color: colors.muted, marginRight: 8 }}>{completedCount} done · {missedCount} missed</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginRight: 8 }}>{completedCount} done Â· {missedCount} missed</Text>
             <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
           </Pressable>
           {isOpen && items.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface, marginLeft: 14 }]}>
@@ -185,6 +188,38 @@ export default function ReviewScreen() {
     </View>}
   </ScrollView></ScreenContainer>;
 }
-const styles = StyleSheet.create({ content: { paddingTop: 24, paddingBottom: 40 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 2.1, marginBottom: 8 }, title: { fontSize: 30, fontWeight: "700", letterSpacing: -0.7 }, subtitle: { fontSize: 14, marginTop: 6, marginBottom: 22 }, prompt: { borderRadius: 18, padding: 16, flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 28 }, promptText: { flex: 1, color: "#D9E4E1", fontSize: 13, lineHeight: 19 }, bucketSection: { marginBottom: 22 }, bucketHeader: { flexDirection: "row", alignItems: "center", marginBottom: 10 }, bucketIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 }, bucketTitle: { fontSize: 16, fontWeight: "700", flex: 1 }, bucketCount: { fontSize: 13, fontWeight: "700" }, item: { minHeight: 52, borderRadius: 13, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 7 }, itemText: { flex: 1, fontSize: 13, fontWeight: "600" }, itemActions: { flexDirection: "row", gap: 6 }, markButton: { width: 28, height: 28, borderRadius: 9, alignItems: "center", justifyContent: "center" }, emptyCheckpoints: { fontSize: 12, lineHeight: 17, marginBottom: 10 }, checkpointItem: { minHeight: 56, borderRadius: 13, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, marginBottom: 7 }, checkpointCopy: { flex: 1 }, checkpointStage: { fontSize: 13, fontWeight: "700" }, checkpointDue: { fontSize: 11, marginTop: 3 }, ackButton: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" }, ask: { borderRadius: 18, borderWidth: 1, padding: 17, marginTop: 4 }, askEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }, askTitle: { fontSize: 16, lineHeight: 22, fontWeight: "700", marginTop: 9, marginBottom: 16 }, askActions: { gap: 8 }, button: { height: 47, borderRadius: 14, alignItems: "center", justifyContent: "center" }, buttonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" }, laterAction: { alignItems: "center", paddingVertical: 8 }, laterText: { fontSize: 13, fontWeight: "600" }, pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] } });
+const styles = StyleSheet.create({
+  content: { paddingTop: spacing.xxl, paddingBottom: spacing.huge },
+  eyebrow: { ...typography.eyebrow, marginBottom: spacing.sm },
+  title: { ...typography.display },
+  subtitle: { ...typography.body, marginTop: spacing.sm, marginBottom: spacing.xxl },
+  prompt: { borderRadius: radii.card, padding: spacing.lg, flexDirection: "row", gap: spacing.md, alignItems: "flex-start", marginBottom: spacing.xxl },
+  promptText: { flex: 1, color: "#D9E4E1", ...typography.bodySmall },
+  bucketSection: { marginBottom: spacing.xxl },
+  bucketHeader: { flexDirection: "row", alignItems: "center", marginBottom: spacing.md },
+  bucketIcon: { width: 32, height: 32, borderRadius: radii.chip, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+  bucketTitle: { ...typography.subtitle, fontWeight: "700", flex: 1 },
+  bucketCount: { ...typography.bodySmall, fontWeight: "700" },
+  item: { minHeight: 52, borderRadius: radii.card, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  itemText: { flex: 1, ...typography.bodySmall, fontWeight: "600" },
+  itemActions: { flexDirection: "row", gap: spacing.sm },
+  markButton: { width: 28, height: 28, borderRadius: radii.chip, alignItems: "center", justifyContent: "center" },
+  emptyCheckpoints: { ...typography.caption, marginBottom: spacing.md },
+  checkpointItem: { minHeight: 56, borderRadius: radii.card, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  checkpointCopy: { flex: 1 },
+  checkpointStage: { ...typography.bodySmall, fontWeight: "700" },
+  checkpointDue: { ...typography.caption, marginTop: spacing.xs },
+  ackButton: { width: 30, height: 30, borderRadius: radii.chip, alignItems: "center", justifyContent: "center" },
+  ask: { borderRadius: radii.card, borderWidth: 1, padding: spacing.lg, marginTop: spacing.xs },
+  askEyebrow: { ...typography.label },
+  askTitle: { ...typography.subtitle, fontWeight: "700", marginTop: spacing.sm, marginBottom: spacing.lg },
+  askActions: { gap: spacing.sm },
+  button: { height: 47, borderRadius: radii.card, alignItems: "center", justifyContent: "center" },
+  buttonText: { color: "#FFFFFF", ...typography.body, fontWeight: "800" },
+  laterAction: { alignItems: "center", paddingVertical: spacing.sm },
+  laterText: { ...typography.bodySmall, fontWeight: "600" },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+});
+
 
 

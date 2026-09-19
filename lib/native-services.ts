@@ -1,21 +1,30 @@
-// MERGED — see MERGE-NOTES.md. Everything above the "Don't Let Me Forget"
+﻿// MERGED â€” see MERGE-NOTES.md. Everything above the "Don't Let Me Forget"
 // section is unchanged from the base project. The cascade section below
 // uses c_next_sequence's schedule/cancel pattern (it returns notification
 // ids so a removed critical flag can actually cancel its pending
-// notifications — a_section7's version had no cancellation path at all)
+// notifications â€” a_section7's version had no cancellation path at all)
 // combined with a_section7's separately-named escalation-speak helper.
 
 import { Linking, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
 import type { Checkpoint } from "./critical-cascade";
+import { getLocalPreferences } from "./preferences";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
 });
 
+function isWithinQuietHours(date: Date, prefs: { quietHoursStart: number; quietHoursEnd: number }): boolean {
+  const hour = date.getHours();
+  const { quietHoursStart: start, quietHoursEnd: end } = prefs;
+  if (start === end) return false;
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+}
+
 export async function registerForNotifications() {
   if (Platform.OS === "web") return null;
+  await Notifications.setNotificationCategoryAsync("checkpoint-action", [{ identifier: "done", buttonTitle: "Done", options: { opensAppToForeground: true } }]);
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("rituals", { name: "Eagle rituals", importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250], lightColor: "#0B6E69" });
   }
@@ -37,11 +46,13 @@ export async function scheduleCommitmentMeeting(title: string, date: string, tim
 
 export async function speakEagle(text: string) {
   if (Platform.OS === "web") return;
+  const prefs = await getLocalPreferences();
+  if (!prefs.voiceEnabled) return;
   if (await Speech.isSpeakingAsync()) await Speech.stop();
   Speech.speak(`This is Eagle. ${text}`, { language: "en-US", rate: 0.92, pitch: 1.0 });
 }
 
-// --- "Don't Let Me Forget" — exactly two checkpoints (FR-G1, FR-G2, FR-G3) ---
+// --- "Don't Let Me Forget" â€” exactly two checkpoints (FR-G1, FR-G2, FR-G3) ---
 
 /**
  * Schedules local notifications for exactly the two given checkpoints and
@@ -52,14 +63,19 @@ export async function speakEagle(text: string) {
 export async function scheduleCriticalCascade(commitmentId: string, title: string, checkpoints: Checkpoint[]): Promise<string[]> {
   if (Platform.OS === "web") return [];
   const ids: string[] = [];
+  const prefs = await getLocalPreferences();
   for (const checkpoint of checkpoints) {
     const when = new Date(checkpoint.dueAt);
+    if (isWithinQuietHours(when, prefs)) {
+      when.setHours(prefs.quietHoursEnd, 0, 0, 0);
+      if (when.getTime() <= Date.now()) when.setDate(when.getDate() + 1);
+    }
     if (when.getTime() <= Date.now()) continue;
     const body = checkpoint.stage === "day_before"
       ? `One day left to finish "${title}". Tap to confirm you're still on track.`
       : `Three hours left for "${title}". Eagle needs a quick acknowledgment.`;
     const id = await Notifications.scheduleNotificationAsync({
-      content: { title: "Eagle · Don't let me forget", body, data: { route: "/", commitmentId, checkpointStage: checkpoint.stage }, sound: "default" },
+      content: { title: "Eagle Â· Don't let me forget", body, data: { route: "/", commitmentId, checkpointStage: checkpoint.stage }, sound: "default", categoryIdentifier: "checkpoint-action" },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
     });
     ids.push(id);
@@ -74,11 +90,11 @@ export async function cancelCriticalCascade(ids: string[]) {
 }
 
 /**
- * FR-G3 escalation — call this once a pending checkpoint is confirmed
+ * FR-G3 escalation â€” call this once a pending checkpoint is confirmed
  * overdue (via `shouldEscalate` in lib/critical-cascade.ts). Fires the voice
  * alert; the caller persists the resulting "escalated" status via
  * `escalateCheckpoint` + the `checkpoints.update` mutation. This covers the
- * case where the app is foregrounded around the checkpoint's due time — true
+ * case where the app is foregrounded around the checkpoint's due time â€” true
  * background escalation while the app is closed requires a server-side push
  * job (tracked as a P1 follow-up in the native validation checklist).
  */
@@ -86,3 +102,6 @@ export async function speakCheckpointEscalation(title: string, stage: "day_befor
   const phrase = stage === "day_before" ? `${title} is due tomorrow and hasn't been acknowledged.` : `${title} is due soon and hasn't been acknowledged.`;
   await speakEagle(phrase);
 }
+
+
+
