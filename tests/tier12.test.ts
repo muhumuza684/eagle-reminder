@@ -50,20 +50,28 @@ describe("Tier 12 - commitment graph", () => {
   });
 
   describe("dependents", () => {
-    // Current behaviour: it follows 'depends_on' edges that leave the given node
-    // and returns their targets (the edge `{ from: "a2", to: "a1" }` yields "a1" for "a2").
-    it("returns the targets of depends_on edges leaving the node, in edge order", () => {
-      expect(dependents(graph, "a2")).toEqual(["a1"]);
-      expect(dependents(graph, "milestone")).toEqual(["a2"]);
+    // An edge { from: "a2", to: "a1", type: "depends_on" } reads "a2 depends on a1",
+    // so the dependents of a1 are the nodes at the `from` end of edges that point at it.
+    it("lists every node that depends on the given node, in edge order", () => {
+      expect(dependents(graph, "a1")).toEqual(["a2"]);
+      expect(dependents(graph, "a2")).toEqual(["milestone"]);
     });
 
-    it("returns nothing for a node that has no outgoing depends_on edge", () => {
-      expect(dependents(graph, "a1")).toEqual([]);
+    it("is not the list of things the node itself depends on", () => {
+      // a2 depends on a1, so a2 is a dependent of a1 and a1 is NOT a dependent of a2
+      expect(dependents(graph, "a2")).not.toContain("a1");
+      expect(dependents(graph, "a1")).toContain("a2");
+    });
+
+    it("returns nothing for a node that nothing depends on", () => {
+      expect(dependents(graph, "milestone")).toEqual([]);
+      expect(dependents(graph, "a3")).toEqual([]);
     });
 
     it("ignores 'contains' and 'blocks' edges", () => {
+      // project is the target of a 'contains' edge and a2 is the target of 'blocks' edges
+      expect(dependents(graph, "project")).toEqual([]);
       expect(dependents(graph, "goal")).toEqual([]);
-      expect(dependents(graph, "a3")).toEqual([]);
     });
 
     it("returns an empty list for an unknown node or an empty graph", () => {
@@ -71,7 +79,7 @@ describe("Tier 12 - commitment graph", () => {
       expect(dependents(empty, "a1")).toEqual([]);
     });
 
-    it("collects several depends_on targets", () => {
+    it("collects several dependents of one node", () => {
       const g: CommitmentGraph = {
         nodes: [
           { id: "x", type: "action" },
@@ -80,10 +88,17 @@ describe("Tier 12 - commitment graph", () => {
         ],
         edges: [
           { from: "x", to: "y", type: "depends_on" },
-          { from: "x", to: "z", type: "depends_on" },
+          { from: "z", to: "y", type: "depends_on" },
         ],
       };
-      expect(dependents(g, "x")).toEqual(["y", "z"]);
+      expect(dependents(g, "y")).toEqual(["x", "z"]);
+      expect(dependents(g, "x")).toEqual([]);
+    });
+
+    it("mirrors blockers: the far end of each depends_on edge lists its source as a dependent", () => {
+      for (const edge of graph.edges.filter((e) => e.type === "depends_on")) {
+        expect(dependents(graph, edge.to)).toContain(edge.from);
+      }
     });
   });
 });
