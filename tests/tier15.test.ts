@@ -42,6 +42,18 @@ describe("Tier 15 - voice intent layer", () => {
     it("is case-insensitive", () => {
       expect(parseVoiceIntent("SHOW me everything").kind).toBe("query");
     });
+
+    it("matches the query words as whole words only", () => {
+      for (const phrase of ["Pick up the whatever", "Plan the showcase", "Buy a whichever", "Call Alistair", "Order the checklist"]) {
+        expect(parseVoiceIntent(phrase)).toEqual({ kind: "create", text: phrase });
+      }
+    });
+
+    it("still matches each query word at either end of the phrase", () => {
+      for (const phrase of ["what", "which", "show", "list", "please show", "my list", "what's next", "tasks, list"]) {
+        expect(parseVoiceIntent(phrase).kind).toBe("query");
+      }
+    });
   });
 
   describe("create (default)", () => {
