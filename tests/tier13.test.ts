@@ -38,6 +38,36 @@ describe("Tier 13 - personal rhythm", () => {
     expect(bestWindow([23])).toEqual({ label: "evening", startHour: 22, endHour: 23, strength: 1 / 14 });
   });
 
+  describe("hours that cross midnight", () => {
+    it("centres late-evening and early-morning hours on midnight, not on noon", () => {
+      // mean of [22, 23, 0, 1] is 23.5 on the clock (a plain average would say 11.5, "morning")
+      expect(bestWindow([22, 23, 0, 1])).toEqual({ label: "evening", startHour: 22, endHour: 23, strength: 4 / 14 });
+      // mean of [23, 0] is 23.5
+      expect(bestWindow([23, 0])).toEqual({ label: "evening", startHour: 22, endHour: 23, strength: 2 / 14 });
+    });
+
+    it("no longer reports [23, 1] as an afternoon rhythm", () => {
+      const w = bestWindow([23, 1])!;
+      expect(w.label).not.toBe("afternoon");
+      expect(w.startHour).toBe(0);
+      expect(w.endHour).toBeLessThanOrEqual(1);
+    });
+
+    it("gives the same answer regardless of input order", () => {
+      expect(bestWindow([1, 23])).toEqual(bestWindow([23, 1]));
+      expect(bestWindow([0, 1, 22, 23])).toEqual(bestWindow([22, 23, 0, 1]));
+    });
+
+    it("leaves ordinary, non-wrapping hours exactly as before", () => {
+      expect(bestWindow([1, 2, 9])).toEqual({ label: "morning", startHour: 3, endHour: 5, strength: 3 / 14 });
+      expect(bestWindow([9, 8, 10])).toEqual(bestWindow([8, 9, 10]));
+    });
+
+    it("keeps an evenly opposed spread (no dominant gap) centred on the plain mean", () => {
+      expect(bestWindow([6, 18])).toEqual({ label: "afternoon", startHour: 11, endHour: 13, strength: 2 / 14 });
+    });
+  });
+
   it("grows in strength with more data and caps at 1 from 14 samples", () => {
     const hours = (n: number) => Array<number>(n).fill(9);
     expect(bestWindow(hours(7))!.strength).toBe(0.5);
