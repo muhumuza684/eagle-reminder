@@ -47,6 +47,35 @@ describe("Tier 05 - capture intelligence", () => {
     expect(p.dueAt).toBe("monday");
   });
 
+  describe("project keywords match whole words", () => {
+    it("does not read a keyword inside another word (happy, apples, wrapped)", () => {
+      for (const input of ["Call happy customers", "Buy apples", "Pick up the mapped route"]) {
+        const p = proposeCapture(input);
+        expect(p.kind).toBe("action");
+        expect(p.nextAction).toBeUndefined();
+        expect(p.reasons).toEqual([]);
+      }
+    });
+
+    it("still recognises every keyword on its own", () => {
+      for (const input of ["Plan the project", "Build the website", "Ship the app", "Prepare the launch", "Write the report"]) {
+        expect(proposeCapture(input).kind).toBe("project");
+      }
+    });
+
+    it("still recognises common inflections", () => {
+      for (const input of ["Review the projects", "Update the apps", "Two launches this year", "Finish the reports", "Launching next month", "Reported yesterday"]) {
+        expect(proposeCapture(input).kind).toBe("project");
+      }
+    });
+
+    it("does not match a keyword that is only a prefix of a longer word", () => {
+      for (const input of ["Renew my application", "Ask the reporter", "Meet the projectionist"]) {
+        expect(proposeCapture(input).kind).toBe("action");
+      }
+    });
+  });
+
   it("trims surrounding whitespace from the title", () => {
     expect(proposeCapture("   Buy milk  ").title).toBe("Buy milk");
   });
