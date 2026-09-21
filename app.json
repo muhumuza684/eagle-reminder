@@ -28,9 +28,15 @@
       "package": "com.anonymous.deaglehub"
     },
     "web": {
+      "favicon": "./assets/images/favicon.png",
+      "name": "D-Eagle Hub",
+      "shortName": "D-Eagle",
+      "display": "standalone",
+      "startUrl": "/",
+      "orientation": "portrait",
+      "backgroundColor": "#ffffff",
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router",
