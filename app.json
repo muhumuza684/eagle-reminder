@@ -50,6 +50,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "67f7b460-bc9b-41c0-a586-58795766de74"
+      }
+    },
+    "owner": "bryt_ma_tech"
   }
 }
