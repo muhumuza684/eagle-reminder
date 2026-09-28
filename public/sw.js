@@ -1,11 +1,12 @@
-const CACHE_NAME = "d-eagle-pwa-v1";
+const CACHE_NAME = "d-eagle-pwa-v2";
 
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/offline.html",
   "/manifest.json",
   "/icon.png",
-  "/apple-touch-icon.png"
+  "/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -24,7 +25,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME)
+            .filter((key) => key.startsWith("d-eagle-pwa-") && key !== CACHE_NAME)
             .map((key) => caches.delete(key))
         )
       )
@@ -32,39 +33,32 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-
-  if (request.method !== "GET") {
-    return;
-  }
+  if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
-  // Network-first for navigation so users receive new releases quickly.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put("/index.html", copy);
-          });
-
+          caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
           return response;
         })
-        .catch(() => caches.match("/index.html"))
+        .catch(async () => {
+          return (await caches.match("/index.html")) || caches.match("/offline.html");
+        })
     );
-
     return;
   }
 
-  // Cache-first for immutable Expo-generated assets.
   if (
     url.pathname.startsWith("/_expo/") ||
     url.pathname.endsWith(".js") ||
@@ -78,38 +72,28 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response.ok) {
               const copy = response.clone();
-
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, copy);
-              });
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
             }
-
             return response;
           })
           .catch(() => cached);
-
         return cached || network;
       })
     );
-
     return;
   }
 
-  // Network-first for PWA metadata/icons.
   if (
     url.pathname === "/manifest.json" ||
     url.pathname === "/icon.png" ||
-    url.pathname === "/apple-touch-icon.png"
+    url.pathname === "/apple-touch-icon.png" ||
+    url.pathname === "/offline.html"
   ) {
     event.respondWith(
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, copy);
-          });
-
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
         .catch(() => caches.match(request))

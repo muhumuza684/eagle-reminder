@@ -1,12 +1,10 @@
 ﻿import { Stack } from "expo-router";
+import { AppShell } from "@/components/app-shell";
 
 export default function TabLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="review" />
-      <Stack.Screen name="dashboard" />
-      <Stack.Screen name="settings" />
-    </Stack>
+    <AppShell>
+      <Stack screenOptions={{ headerShown: false }} />
+    </AppShell>
   );
 }

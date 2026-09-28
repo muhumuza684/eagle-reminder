@@ -62,7 +62,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate": "npm run typecheck && npm run test",
-    "push:job": "tsx scripts/run-push-job.ts"
+    "push:job": "tsx scripts/run-push-job.ts",
+    "verify:pwa": "node scripts/verify-pwa.mjs"
   },
   "private": true
 }

@@ -1,15 +1,18 @@
+﻿import {
+  D_EAGLE_COLORS,
+  D_EAGLE_DARK_COLORS,
+  type DEagleColorToken,
+} from "@/constants/design-tokens";
 import { useColorScheme } from "@/components/useColorScheme";
-import { themeColors } from "@/theme.config.js";
 
-type ColorToken = keyof typeof themeColors;
-type Colors = { [K in ColorToken]: string };
+export type AppColors = {
+  [K in DEagleColorToken]: string;
+};
 
-export function useColors(): Colors {
+export function useColors(): AppColors {
   const scheme = useColorScheme() ?? "light";
-  const colors = {} as Colors;
-  for (const key in themeColors) {
-    const token = key as ColorToken;
-    colors[token] = themeColors[token][scheme as "light" | "dark"];
-  }
-  return colors;
+
+  return scheme === "dark"
+    ? D_EAGLE_DARK_COLORS
+    : D_EAGLE_COLORS;
 }

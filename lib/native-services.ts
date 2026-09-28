@@ -1,107 +1,144 @@
-﻿// MERGED â€” see MERGE-NOTES.md. Everything above the "Don't Let Me Forget"
-// section is unchanged from the base project. The cascade section below
-// uses c_next_sequence's schedule/cancel pattern (it returns notification
-// ids so a removed critical flag can actually cancel its pending
-// notifications â€” a_section7's version had no cancellation path at all)
-// combined with a_section7's separately-named escalation-speak helper.
+import type { Checkpoint } from './critical-cascade';
 
-import { Linking, Platform } from "react-native";
-import * as Notifications from "expo-notifications";
-import * as Speech from "expo-speech";
-import type { Checkpoint } from "./critical-cascade";
-import { getLocalPreferences } from "./preferences";
+let dailyReminderInterval: ReturnType<typeof setInterval> | null = null;
+const webTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
-});
+function browserTimer(key: string, when: number, title: string, body: string, data?: Record<string, unknown>) {
+  const delay = when - Date.now();
+  if (delay <= 0) return '';
+  const existing = webTimers.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    webTimers.delete(key);
+    void browserNotification(title, body, data);
+  }, Math.min(delay, 2_147_000_000));
+  webTimers.set(key, timer);
+  return key;
+}
 
-function isWithinQuietHours(date: Date, prefs: { quietHoursStart: number; quietHoursEnd: number }): boolean {
-  const hour = date.getHours();
-  const { quietHoursStart: start, quietHoursEnd: end } = prefs;
-  if (start === end) return false;
-  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+function browserNotificationsSupported() {
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+async function browserNotification(title: string, body: string, data?: Record<string, unknown>) {
+  if (!browserNotificationsSupported()) return false;
+  const NotificationApi = window.Notification;
+  if (NotificationApi.permission === 'default') {
+    await NotificationApi.requestPermission();
+  }
+  if (NotificationApi.permission !== 'granted') return false;
+  try {
+    new NotificationApi(title, { body, data });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function registerForNotifications() {
-  if (Platform.OS === "web") return null;
-  await Notifications.setNotificationCategoryAsync("checkpoint-action", [{ identifier: "done", buttonTitle: "Done", options: { opensAppToForeground: true } }]);
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("rituals", { name: "Eagle rituals", importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250], lightColor: "#0B6E69" });
-  }
-  const existing = await Notifications.getPermissionsAsync();
-  const status = existing.status === "granted" ? existing.status : (await Notifications.requestPermissionsAsync()).status;
-  if (status !== "granted") return null;
-  try { return (await Notifications.getExpoPushTokenAsync()).data; } catch { return null; }
+  if (!browserNotificationsSupported()) return null;
+  const permission = window.Notification.permission === 'granted'
+    ? 'granted'
+    : await window.Notification.requestPermission();
+  return permission === 'granted' ? 'web-browser' : null;
 }
 
 export async function scheduleDailyRituals(briefingHour = 8, reviewHour = 22) {
-  if (Platform.OS === "web") return;
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  await Notifications.scheduleNotificationAsync({ content: { title: "Good morning from Eagle", body: "Your day is ready. Open your Morning Briefing.", data: { route: "/" }, sound: "default" }, trigger: { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, hour: briefingHour, minute: 0, repeats: true } });
-  await Notifications.scheduleNotificationAsync({ content: { title: "Nightly Review", body: "Close the loop before midnight. Eagle is here when you are.", data: { route: "/review" }, sound: "default" }, trigger: { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, hour: reviewHour, minute: 0, repeats: true } });
+  if (dailyReminderInterval) clearInterval(dailyReminderInterval);
+
+  const check = async () => {
+    if (!browserNotificationsSupported()) return;
+    const permission = window.Notification.permission === 'granted'
+      ? 'granted'
+      : await window.Notification.requestPermission();
+    if (permission !== 'granted') return;
+
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10);
+    const lastMorning = window.localStorage.getItem('deagle-pwa-morning-reminder');
+    const lastNight = window.localStorage.getItem('deagle-pwa-night-reminder');
+
+    if (now.getHours() === briefingHour && now.getMinutes() < 2 && lastMorning !== day) {
+      await browserNotification('Good morning from Eagle', 'Your day is ready. Open your Morning Briefing.', { route: '/' });
+      window.localStorage.setItem('deagle-pwa-morning-reminder', day);
+    }
+
+    if (now.getHours() === reviewHour && now.getMinutes() < 2 && lastNight !== day) {
+      await browserNotification('Nightly Review', 'Close the loop before midnight. Eagle is here when you are.', { route: '/review' });
+      window.localStorage.setItem('deagle-pwa-night-reminder', day);
+    }
+  };
+
+  await check();
+  dailyReminderInterval = setInterval(() => { void check(); }, 60_000);
 }
 
-export async function openMeeting(provider: "zoom" | "meet", url?: string) { const target = url || (provider === "zoom" ? "https://zoom.us/join" : "https://meet.google.com/"); try { if (await Linking.canOpenURL(target)) { await Linking.openURL(target); return; } } catch { /* Fall through to browser fallback. */ } const browserUrl = target.startsWith("http") ? target : provider === "zoom" ? "https://zoom.us/join" : "https://meet.google.com/"; await Linking.openURL(browserUrl); }
-export async function scheduleCommitmentMeeting(title: string, date: string, time: string, provider: "zoom" | "meet", url?: string, muteWarning = false) { if (Platform.OS === "web") return; const [hour, minute] = time.split(":").map(Number); const [year, month, day] = date.split("-").map(Number); const target = url || (provider === "zoom" ? "https://zoom.us/join" : "https://meet.google.com/"); const meetingDate = new Date(year, month - 1, day, hour, minute); const warningDate = new Date(meetingDate.getTime() - 5 * 60 * 1000); const content = { data: { meetingProvider: provider, meetingUrl: target }, sound: "default" as const }; if (!muteWarning) await Notifications.scheduleNotificationAsync({ content: { ...content, title: "Five-minute heads-up", body: `${title} starts in five minutes. Get ready to join.` }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: warningDate } }); await Notifications.scheduleNotificationAsync({ content: { ...content, title: `${provider === "zoom" ? "Zoom" : "Google Meet"} time`, body: title }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: meetingDate } }); }
+export async function openMeeting(provider: 'zoom' | 'meet', url?: string) {
+  const target = url || (provider === 'zoom' ? 'https://zoom.us/join' : 'https://meet.google.com/');
+  if (typeof window !== 'undefined') window.open(target, '_blank', 'noopener,noreferrer');
+}
+
+export async function scheduleCommitmentMeeting(title: string, date: string, time: string, provider: 'zoom' | 'meet', _url?: string, muteWarning = false) {
+  const [hour, minute] = time.split(':').map(Number);
+  const [year, month, day] = date.split('-').map(Number);
+  const meetingDate = new Date(year, month - 1, day, hour, minute);
+  const warningDate = new Date(meetingDate.getTime() - 5 * 60 * 1000);
+  if (!muteWarning) {
+    browserTimer(`meeting-warning:${date}:${time}:${title}`, warningDate.getTime(), 'Eagle · Five-minute heads-up', `${title} starts in five minutes.`);
+  }
+  browserTimer(`meeting:${date}:${time}:${title}`, meetingDate.getTime(), `${provider === 'zoom' ? 'Zoom' : 'Google Meet'} time`, title);
+}
 
 export async function speakEagle(text: string) {
-  if (Platform.OS === "web") return;
-  const prefs = await getLocalPreferences();
-  if (!prefs.voiceEnabled) return;
-  if (await Speech.isSpeakingAsync()) await Speech.stop();
-  Speech.speak(`This is Eagle. ${text}`, { language: "en-US", rate: 0.92, pitch: 1.0 });
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const utterance = new SpeechSynthesisUtterance(`This is Eagle. ${text}`);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.92;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
 }
 
-// --- "Don't Let Me Forget" â€” exactly two checkpoints (FR-G1, FR-G2, FR-G3) ---
-
-/**
- * Schedules local notifications for exactly the two given checkpoints and
- * returns their notification identifiers so the caller can cancel them if
- * the critical flag is later removed. Checkpoints already in the past are
- * skipped rather than fired immediately.
- */
-export async function scheduleCriticalCascade(commitmentId: string, title: string, checkpoints: Checkpoint[]): Promise<string[]> {
-  if (Platform.OS === "web") return [];
+export async function scheduleCriticalCascade(commitmentId: string, title: string, checkpoints: Checkpoint[]) {
   const ids: string[] = [];
-  const prefs = await getLocalPreferences();
   for (const checkpoint of checkpoints) {
-    const when = new Date(checkpoint.dueAt);
-    if (isWithinQuietHours(when, prefs)) {
-      when.setHours(prefs.quietHoursEnd, 0, 0, 0);
-      if (when.getTime() <= Date.now()) when.setDate(when.getDate() + 1);
-    }
-    if (when.getTime() <= Date.now()) continue;
-    const body = checkpoint.stage === "day_before"
-      ? `One day left to finish "${title}". Tap to confirm you're still on track.`
-      : `Three hours left for "${title}". Eagle needs a quick acknowledgment.`;
-    const id = await Notifications.scheduleNotificationAsync({
-      content: { title: "Eagle Â· Don't let me forget", body, data: { route: "/", commitmentId, checkpointStage: checkpoint.stage }, sound: "default", categoryIdentifier: "checkpoint-action" },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
-    });
-    ids.push(id);
+    const when = new Date(checkpoint.dueAt).getTime();
+    const body = checkpoint.stage === 'day_before'
+      ? `One day left to finish \"${title}\".`
+      : `Three hours left for \"${title}\".`;
+    const id = browserTimer(
+      `checkpoint:${commitmentId}:${checkpoint.stage}`,
+      when,
+      'Eagle · Checkpoint',
+      body,
+      { route: '/', commitmentId, checkpointStage: checkpoint.stage },
+    );
+    if (id) ids.push(id);
   }
   return ids;
 }
 
-/** Cancels any still-pending checkpoint notifications, e.g. when a critical flag is removed. */
+
 export async function cancelCriticalCascade(ids: string[]) {
-  if (Platform.OS === "web" || ids.length === 0) return;
-  await Promise.all(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+  for (const id of ids) {
+    const timer = webTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      webTimers.delete(id);
+    }
+  }
 }
 
-/**
- * FR-G3 escalation â€” call this once a pending checkpoint is confirmed
- * overdue (via `shouldEscalate` in lib/critical-cascade.ts). Fires the voice
- * alert; the caller persists the resulting "escalated" status via
- * `escalateCheckpoint` + the `checkpoints.update` mutation. This covers the
- * case where the app is foregrounded around the checkpoint's due time â€” true
- * background escalation while the app is closed requires a server-side push
- * job (tracked as a P1 follow-up in the native validation checklist).
- */
-export async function speakCheckpointEscalation(title: string, stage: "day_before" | "three_hours") {
-  const phrase = stage === "day_before" ? `${title} is due tomorrow and hasn't been acknowledged.` : `${title} is due soon and hasn't been acknowledged.`;
+export async function speakCheckpointEscalation(title: string, stage: 'day_before' | 'three_hours') {
+  const phrase = stage === 'day_before'
+    ? `${title} is due tomorrow and hasn't been acknowledged.`
+    : `${title} is due soon and hasn't been acknowledged.`;
+  await browserNotification('Eagle · Checkpoint escalation', phrase);
   await speakEagle(phrase);
 }
 
-
-
+export async function notifyCriticalCheckpoint(title: string, stage: 'day_before' | 'three_hours') {
+  const body = stage === 'day_before'
+    ? `One day left to finish "${title}".`
+    : `Three hours left for "${title}".`;
+  return browserNotification('Eagle · Checkpoint', body, { route: '/' });
+}

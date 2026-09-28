@@ -1,4 +1,4 @@
-﻿import "react-native-get-random-values";
+import "react-native-get-random-values";
 import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import * as Linking from "expo-linking";
@@ -9,8 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { AuthGate } from "@/components/auth-gate";
 import { completeOAuthFromUrl } from "@/lib/_core/auth";
-import * as Notifications from "expo-notifications";
-import { setPendingCheckpointAck } from "@/lib/pending-notification-action";
+import { CheckpointNotificationListener } from "@/lib/notification-listener";
 
 function DeepLinkAuthListener() {
   const utils = trpc.useUtils();
@@ -24,20 +23,6 @@ function DeepLinkAuthListener() {
     const subscription = Linking.addEventListener("url", (event) => handleUrl(event.url));
     return () => subscription.remove();
   }, [utils]);
-
-  return null;
-}
-
-function CheckpointNotificationListener() {
-  useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { commitmentId?: string; checkpointStage?: "day_before" | "three_hours" };
-      if (!data?.commitmentId || !data?.checkpointStage) return;
-      if (response.actionIdentifier !== "done" && response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
-      setPendingCheckpointAck({ commitmentId: data.commitmentId, stage: data.checkpointStage });
-    });
-    return () => subscription.remove();
-  }, []);
 
   return null;
 }

@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, Pressable, Switch, StyleSheet, Platform } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimeField from "@/components/date-time-field";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/use-colors";
 import { radii } from "@/constants/radii";
@@ -8,6 +8,7 @@ import { spacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { getLocalPreferences, setLocalPreferences } from "@/lib/preferences";
 import { exportLocalData, importLocalData } from "@/lib/local-data";
+import { registerForNotifications, scheduleDailyRituals } from "@/lib/native-services";
 
 
 /**
@@ -40,15 +41,28 @@ export default function SettingsScreen() {
   const [voiceAlertsEnabled, setVoiceAlertsEnabled] = useState(true);
 
   useEffect(() => {
-    getLocalPreferences().then((prefs) => {
+    getLocalPreferences().then(async (prefs) => {
+      setRemindersEnabled(prefs.notificationsEnabled);
+      setQuietStart(prefs.quietHoursStart);
+      setQuietEnd(prefs.quietHoursEnd);
+      setBriefingHour(prefs.briefingHour);
+      setReviewHour(prefs.reviewHour);
       setReminderFrequency(prefs.reminderFrequency);
       setVoiceAlertsEnabled(prefs.voiceEnabled);
+      if (prefs.notificationsEnabled) {
+        await registerForNotifications();
+        await scheduleDailyRituals(prefs.briefingHour, prefs.reviewHour);
+      }
     });
   }, []);
 
   const toggleReminders = async (value: boolean) => {
     setRemindersEnabled(value);
-    await setLocalPreferences({ notificationsEnabled: value });
+    const next = await setLocalPreferences({ notificationsEnabled: value });
+    if (value) {
+      await registerForNotifications();
+      await scheduleDailyRituals(next.briefingHour, next.reviewHour);
+    }
   };
 
   const setFrequency = async (value: 1 | 2 | 3) => {
@@ -62,16 +76,32 @@ export default function SettingsScreen() {
   };
 
   const applyPickerHour = async (hour: number) => {
-    if (picker === "briefing") { setBriefingHour(hour); await setLocalPreferences({ briefingHour: hour }); }
-    if (picker === "review") { setReviewHour(hour); await setLocalPreferences({ reviewHour: hour }); }
-    if (picker === "quietStart") { setQuietStart(hour); await setLocalPreferences({ quietHoursStart: hour }); }
-    if (picker === "quietEnd") { setQuietEnd(hour); await setLocalPreferences({ quietHoursEnd: hour }); }
+    let next = await getLocalPreferences();
+    if (picker === "briefing") { setBriefingHour(hour); next = await setLocalPreferences({ briefingHour: hour }); }
+    if (picker === "review") { setReviewHour(hour); next = await setLocalPreferences({ reviewHour: hour }); }
+    if (picker === "quietStart") { setQuietStart(hour); next = await setLocalPreferences({ quietHoursStart: hour }); }
+    if (picker === "quietEnd") { setQuietEnd(hour); next = await setLocalPreferences({ quietHoursEnd: hour }); }
+    if (remindersEnabled) await scheduleDailyRituals(next.briefingHour, next.reviewHour);
     setPicker(null);
   };
 
   const exportBackup = async () => {
     try {
-      await exportLocalData();
+      const json = await exportLocalData();
+      if (Platform.OS === "web") {
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `d-eagle-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        setDataError("Backup is ready in local storage. Use the web app to download a file backup.");
+        setTimeout(() => setDataError(""), 4200);
+      }
     } catch {
       setDataError("Could not create the local backup.");
       setTimeout(() => setDataError(""), 4200);
@@ -167,15 +197,14 @@ export default function SettingsScreen() {
       <Text style={[styles.syncNote, { color: colors.muted }]}>
         Your data is stored locally on this device. Export a backup before changing devices or clearing browser storage.
       </Text>
-      {dataError ? <Text style={[styles.syncNote, { color: "#C94F3B", marginTop: 0 }]}>{dataError}</Text> : null}
+      {dataError ? <Text style={[styles.syncNote, { color: "#F8444F", marginTop: 0 }]}>{dataError}</Text> : null}
 
 
       {picker && (
-        <DateTimePicker
+        <DateTimeField
           value={new Date(2000, 0, 1, picker === "briefing" ? briefingHour : picker === "review" ? reviewHour : picker === "quietStart" ? quietStart : quietEnd, 0)}
           mode="time"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={(_event, date) => { if (date) applyPickerHour(date.getHours()); else setPicker(null); }}
+          onChange={(date) => { if (date) applyPickerHour(date.getHours()); else setPicker(null); }}
         />
       )}
     </View>

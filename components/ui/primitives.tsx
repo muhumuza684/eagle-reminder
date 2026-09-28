@@ -86,7 +86,7 @@ export function AppButton({
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radii.card, padding: spacing.lg, gap: spacing.md },
   cardElevated: {
-    shadowColor: "#10242A",
+    shadowColor: "#012C3D",
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },

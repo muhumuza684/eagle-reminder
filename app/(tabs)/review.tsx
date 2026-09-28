@@ -1,4 +1,4 @@
-﻿// MERGED (round 2) â€” base is the "d_full" build's rewrite of this screen,
+// MERGED (round 2) â€” base is the "d_full" build's rewrite of this screen,
 // which fixed a real bug: this tab previously showed hardcoded demo data
 // instead of the actual day's commitments. The only change here is
 // switching the checkpoint acknowledge wiring from a boolean `acknowledged`
@@ -119,16 +119,16 @@ export default function ReviewScreen() {
     <Text style={[styles.eyebrow, { color: colors.primary }]}>NIGHTLY REVIEW</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>Close the loop.</Text>
     <Text style={[styles.subtitle, { color: colors.muted }]}>A two-minute reset so tomorrow starts lighter.</Text>
-    <View style={[styles.prompt, { backgroundColor: colors.foreground }]}><Ionicons name="moon" size={21} color="#F4B942" /><Text style={styles.promptText}>Anything unmarked by midnight becomes missed. Eagle will help you carry forward what matters.</Text></View>
-    {syncNotice ? <View style={{ flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#FCE5E0", borderRadius: 12, padding: 10, marginBottom: 16 }}><Ionicons name="cloud-offline-outline" size={15} color="#E87561" /><Text style={{ flex: 1, fontSize: 11, color: "#9B4A3D" }}>{syncNotice}</Text></View> : null}
+    <View style={[styles.prompt, { backgroundColor: colors.foreground }]}><Ionicons name="moon" size={21} color="#78BDC4" /><Text style={styles.promptText}>Anything unmarked by midnight becomes missed. Eagle will help you carry forward what matters.</Text></View>
+    {syncNotice ? <View style={{ flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#FCE5E0", borderRadius: 12, padding: 10, marginBottom: 16 }}><Ionicons name="cloud-offline-outline" size={15} color="#F8444F" /><Text style={{ flex: 1, fontSize: 11, color: "#9B4A3D" }}>{syncNotice}</Text></View> : null}
 
     {buckets.open.length > 0 && <View style={styles.bucketSection}>
       <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#E9EFEC" }]}><Ionicons name="ellipse-outline" size={17} color={colors.muted} /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Still open</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{buckets.open.length}</Text></View>
       {buckets.open.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text>
         <View style={styles.itemActions}>
-          <Pressable accessibilityLabel="Mark completed" onPress={() => markCompleted(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#0B6E69" }, pressed && styles.pressed]}><Ionicons name="checkmark" size={15} color="#FFFFFF" /></Pressable>
-          <Pressable accessibilityLabel="Mark missed" onPress={() => markMissed(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#E87561" }, pressed && styles.pressed]}><Ionicons name="close" size={15} color="#FFFFFF" /></Pressable>
+          <Pressable accessibilityLabel="Mark completed" onPress={() => markCompleted(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#012C3D" }, pressed && styles.pressed]}><Ionicons name="checkmark" size={15} color="#FFFFFF" /></Pressable>
+          <Pressable accessibilityLabel="Mark missed" onPress={() => markMissed(item.id)} style={({ pressed }) => [styles.markButton, { backgroundColor: "#F8444F" }, pressed && styles.pressed]}><Ionicons name="close" size={15} color="#FFFFFF" /></Pressable>
         </View>
       </View>)}
     </View>}
@@ -136,7 +136,7 @@ export default function ReviewScreen() {
     {(["completed", "rescheduled", "missed"] as const).map((bucket) => {
       const items = buckets[bucket];
       if (items.length === 0) return null;
-      const meta = bucket === "completed" ? { label: "Completed", bg: "#DDEDEA", icon: "checkmark-circle" as const, color: "#0B6E69" } : bucket === "rescheduled" ? { label: "Rescheduled", bg: "#FFF4D9", icon: "time" as const, color: "#F4B942" } : { label: "Missed", bg: "#FCE5E0", icon: "close-circle" as const, color: "#E87561" };
+      const meta = bucket === "completed" ? { label: "Completed", bg: "#DDEDEA", icon: "checkmark-circle" as const, color: "#012C3D" } : bucket === "rescheduled" ? { label: "Rescheduled", bg: "#FFF4D9", icon: "time" as const, color: "#78BDC4" } : { label: "Missed", bg: "#FCE5E0", icon: "close-circle" as const, color: "#F8444F" };
       return <View key={bucket} style={styles.bucketSection}>
         <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: meta.bg }]}><Ionicons name={meta.icon} size={18} color={meta.color} /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>{meta.label}</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{items.length}</Text></View>
         {items.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface }]}><Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text><Ionicons name={meta.icon} size={18} color={meta.color} /></View>)}
@@ -147,7 +147,7 @@ export default function ReviewScreen() {
     {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && todayCommitments.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing captured for today yet â€” head to the Today tab.</Text>}
 
     {isAuthenticated && <View style={styles.bucketSection}>
-      <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#FCE5E0" }]}><Ionicons name="flag" size={17} color="#E87561" /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Critical checkpoints</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{openCheckpoints.length}</Text></View>
+      <View style={styles.bucketHeader}><View style={[styles.bucketIcon, { backgroundColor: "#FCE5E0" }]}><Ionicons name="flag" size={17} color="#F8444F" /></View><Text style={[styles.bucketTitle, { color: colors.foreground }]}>Critical checkpoints</Text><Text style={[styles.bucketCount, { color: colors.muted }]}>{openCheckpoints.length}</Text></View>
       {openCheckpoints.length === 0 && <Text style={[styles.emptyCheckpoints, { color: colors.muted }]}>Nothing waiting on a "don't let me forget" checkpoint right now.</Text>}
       {openCheckpoints.map((checkpoint) => <View key={checkpoint.id} style={[styles.checkpointItem, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <View style={styles.checkpointCopy}>
@@ -172,7 +172,7 @@ export default function ReviewScreen() {
           </Pressable>
           {isOpen && items.map((item) => <View key={item.id} style={[styles.item, { borderColor: colors.border, backgroundColor: colors.surface, marginLeft: 14 }]}>
             <Text style={[styles.itemText, { color: colors.foreground }]}>{item.title}</Text>
-            <Ionicons name={item.status === "completed" ? "checkmark-circle" : item.status === "missed" ? "close-circle" : "time"} size={16} color={item.status === "completed" ? "#0B6E69" : item.status === "missed" ? "#E87561" : "#F4B942"} />
+            <Ionicons name={item.status === "completed" ? "checkmark-circle" : item.status === "missed" ? "close-circle" : "time"} size={16} color={item.status === "completed" ? "#012C3D" : item.status === "missed" ? "#F8444F" : "#78BDC4"} />
           </View>)}
         </View>;
       })}
