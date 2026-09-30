@@ -1,6 +1,28 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
+// The service worker is registered on the real site only. On localhost it is
+// removed, so a development session never runs on a stale cached copy.
+const SERVICE_WORKER_SCRIPT = `
+  if ('serviceWorker' in navigator) {
+    var local = ['localhost', '127.0.0.1', '[::1]'].indexOf(window.location.hostname) !== -1;
+    if (local) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (registration) { registration.unregister(); });
+      }).catch(function () {});
+      if (window.caches) {
+        caches.keys().then(function (keys) {
+          keys.forEach(function (key) { if (key.indexOf('d-eagle-pwa-') === 0) caches.delete(key); });
+        }).catch(function () {});
+      }
+    } else {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      });
+    }
+  }
+`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="en">
@@ -22,19 +44,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker
-                    .register('/sw.js')
-                    .catch(() => {});
-                });
-              }
-            `,
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: SERVICE_WORKER_SCRIPT }} />
 
         <ScrollViewStyleReset />
       </head>

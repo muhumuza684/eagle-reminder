@@ -34,9 +34,9 @@ export default function RootLayout() {
   // expo-font first. Gate rendering on it the same way splash-screen-based
   // font loading normally does, so nothing paints an icon before the font
   // is actually available.
-  const [iconsLoaded] = useFonts({ ...Ionicons.font });
+  const [iconsLoaded, iconsError] = useFonts({ ...Ionicons.font });
 
-  if (!iconsLoaded) {
+  if (!iconsLoaded && !iconsError) {
     return null;
   }
 
