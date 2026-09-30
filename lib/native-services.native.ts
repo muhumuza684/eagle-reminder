@@ -136,3 +136,32 @@ export async function speakCheckpointEscalation(title: string, stage: 'day_befor
     : `${title} is due soon and hasn't been acknowledged.`;
   await speakEagle(phrase);
 }
+
+export async function scheduleReminder(commitmentId: string, title: string, when: Date): Promise<string> {
+  try {
+    const prefs = await getLocalPreferences();
+    if (!prefs.notificationsEnabled) return '';
+    const at = new Date(when);
+    if (isWithinQuietHours(at, prefs)) {
+      at.setHours(prefs.quietHoursEnd, 0, 0, 0);
+      if (at.getTime() <= Date.now()) at.setDate(at.getDate() + 1);
+    }
+    if (at.getTime() <= Date.now()) return '';
+    const Notifications = await getNotifications();
+    return await Notifications.scheduleNotificationAsync({
+      content: { title: 'Reminder', body: title, data: { route: '/', commitmentId }, sound: 'default' },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+    });
+  } catch {
+    return '';
+  }
+}
+
+export async function cancelReminder(id: string) {
+  try {
+    const Notifications = await getNotifications();
+    await Notifications.cancelScheduledNotificationAsync(id);
+  } catch {
+    // Notifications unavailable (for example Expo Go) - nothing to cancel.
+  }
+}

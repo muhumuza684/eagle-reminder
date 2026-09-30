@@ -114,3 +114,15 @@ export async function notifyCriticalCheckpoint(title: string, stage: 'day_before
     : `Three hours left for "${title}".`;
   return browserNotification('Eagle · Checkpoint', body, { route: '/' });
 }
+
+export async function scheduleReminder(commitmentId: string, title: string, when: Date): Promise<string> {
+  return browserTimer(`reminder:${commitmentId}`, when.getTime(), 'Reminder', title, { route: '/', commitmentId });
+}
+
+export async function cancelReminder(id: string) {
+  const timer = webTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    webTimers.delete(id);
+  }
+}
