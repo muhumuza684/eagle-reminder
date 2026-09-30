@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -19,8 +19,6 @@ const requiredFiles = [
   'theme.config.js',
   'lib/native-services.ts',
   'lib/native-services.native.ts',
-  'lib/notification-listener.ts',
-  'lib/notification-listener.native.ts',
   'components/date-time-field.web.tsx',
   'components/date-time-field.native.tsx',
   'hooks/use-voice-capture.web.ts',
