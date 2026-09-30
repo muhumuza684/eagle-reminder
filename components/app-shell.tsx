@@ -20,8 +20,6 @@ const DESKTOP_BREAKPOINT = 860;
 const SIDEBAR_WIDTH = 240;
 
 function activeKey(pathname: string) {
-  if (pathname.startsWith("/dashboard")) return "progress";
-  if (pathname.startsWith("/review")) return "review";
   if (pathname.startsWith("/settings")) return "settings";
   return "today";
 }
@@ -70,29 +68,6 @@ function Brand() {
   );
 }
 
-function Avatar() {
-  const colors = useColors();
-
-  return (
-    <View
-      accessibilityRole="image"
-      accessibilityLabel="Profile"
-      style={[
-        styles.avatar,
-        { backgroundColor: colors.navy },
-      ]}
-    >
-      <Text
-        style={[
-          styles.avatarText,
-          { color: colors.paper },
-        ]}
-      >
-        A
-      </Text>
-    </View>
-  );
-}
 
 export function AppShell({
   children,
@@ -150,14 +125,10 @@ export function AppShell({
                   >
                     <Ionicons
                       name={
-                        item.key === "today"
-                          ? "today-outline"
-                          : item.key === "progress"
-                            ? "pulse-outline"
-                            : item.key === "review"
-                              ? "checkmark-circle-outline"
-                              : "settings-outline"
-                      }
+                          item.key === "today"
+                            ? "today-outline"
+                            : "settings-outline"
+                        }
                       size={19}
                       color={
                         selected
@@ -223,7 +194,6 @@ export function AppShell({
                 >
                   Private by default
                 </Text>
-                <Avatar />
               </View>
             </View>
           </View>
@@ -243,7 +213,6 @@ export function AppShell({
               >
                 D-EAGLE HUB
               </Text>
-              <Avatar />
             </View>
 
             <View style={styles.page}>
@@ -263,7 +232,6 @@ export function AppShell({
             ]}
           >
             <Brand />
-            <Avatar />
           </View>
 
           <View style={styles.page}>
@@ -292,14 +260,10 @@ export function AppShell({
                 >
                   <Ionicons
                     name={
-                      item.key === "today"
-                        ? "today-outline"
-                        : item.key === "progress"
-                          ? "pulse-outline"
-                          : item.key === "review"
-                            ? "checkmark-circle-outline"
+                          item.key === "today"
+                            ? "today-outline"
                             : "settings-outline"
-                    }
+                        }
                     size={21}
                     color={
                       selected
@@ -403,18 +367,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
-  avatarText: {
-    fontSize: 14,
-    fontWeight: "800",
-  },
 
   desktopContent: {
     flex: 1,

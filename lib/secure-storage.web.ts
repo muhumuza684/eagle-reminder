@@ -59,9 +59,19 @@ function decrypt(value: string) {
 export async function getItem(key: string) {
   const stored = readRaw(key);
   if (stored === null) return null;
-  const plaintext = decrypt(stored);
-  if (!stored.startsWith(ENCRYPTED_PREFIX)) await setItem(key, plaintext);
-  return plaintext;
+
+  try {
+    const plaintext = decrypt(stored);
+
+    if (!stored.startsWith(ENCRYPTED_PREFIX)) {
+      await setItem(key, plaintext);
+    }
+
+    return plaintext;
+  } catch {
+    removeRaw(key);
+    return null;
+  }
 }
 
 export async function setItem(key: string, value: string) {

@@ -35,44 +35,16 @@ async function browserNotification(title: string, body: string, data?: Record<st
   }
 }
 
-export async function registerForNotifications() {
-  if (!browserNotificationsSupported()) return null;
-  const permission = window.Notification.permission === 'granted'
-    ? 'granted'
-    : await window.Notification.requestPermission();
-  return permission === 'granted' ? 'web-browser' : null;
-}
+export async function requestLocalNotificationPermission() {
+  if (!browserNotificationsSupported()) return false;
 
-export async function scheduleDailyRituals(briefingHour = 8, reviewHour = 22) {
-  if (dailyReminderInterval) clearInterval(dailyReminderInterval);
-
-  const check = async () => {
-    if (!browserNotificationsSupported()) return;
-    const permission = window.Notification.permission === 'granted'
-      ? 'granted'
+  const permission =
+    window.Notification.permission === "granted"
+      ? "granted"
       : await window.Notification.requestPermission();
-    if (permission !== 'granted') return;
 
-    const now = new Date();
-    const day = now.toISOString().slice(0, 10);
-    const lastMorning = window.localStorage.getItem('deagle-pwa-morning-reminder');
-    const lastNight = window.localStorage.getItem('deagle-pwa-night-reminder');
-
-    if (now.getHours() === briefingHour && now.getMinutes() < 2 && lastMorning !== day) {
-      await browserNotification('Good morning from Eagle', 'Your day is ready. Open your Morning Briefing.', { route: '/' });
-      window.localStorage.setItem('deagle-pwa-morning-reminder', day);
-    }
-
-    if (now.getHours() === reviewHour && now.getMinutes() < 2 && lastNight !== day) {
-      await browserNotification('Nightly Review', 'Close the loop before midnight. Eagle is here when you are.', { route: '/review' });
-      window.localStorage.setItem('deagle-pwa-night-reminder', day);
-    }
-  };
-
-  await check();
-  dailyReminderInterval = setInterval(() => { void check(); }, 60_000);
+  return permission === "granted";
 }
-
 export async function openMeeting(provider: 'zoom' | 'meet', url?: string) {
   const target = url || (provider === 'zoom' ? 'https://zoom.us/join' : 'https://meet.google.com/');
   if (typeof window !== 'undefined') window.open(target, '_blank', 'noopener,noreferrer');

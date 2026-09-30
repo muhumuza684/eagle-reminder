@@ -1,57 +1,56 @@
 // Native adapter kept isolated from the PWA bundle.
 import { Linking } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import type { Checkpoint } from './critical-cascade';
 import { getLocalPreferences } from './preferences';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+let notificationsPromise: Promise<typeof import("expo-notifications")> | null = null;
 
-function isWithinQuietHours(date: Date, prefs: { quietHoursStart: number; quietHoursEnd: number }) {
-  const hour = date.getHours();
-  const { quietHoursStart: start, quietHoursEnd: end } = prefs;
-  if (start === end) return false;
-  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+async function getNotifications() {
+  if (!notificationsPromise) {
+    notificationsPromise = import("expo-notifications").then((api) => {
+      api.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+
+      return api;
+    });
+  }
+
+  return notificationsPromise;
 }
 
-export async function registerForNotifications() {
-  await Notifications.setNotificationCategoryAsync('checkpoint-action', [
-    { identifier: 'done', buttonTitle: 'Done', options: { opensAppToForeground: true } },
-  ]);
-
+export async function requestLocalNotificationPermission() {
+  const Notifications = await getNotifications();
   const permissions = await Notifications.getPermissionsAsync();
-  const status = permissions.status === 'granted'
+
+  const status = permissions.granted
     ? permissions.status
     : (await Notifications.requestPermissionsAsync()).status;
-  if (status !== 'granted') return null;
 
-  try {
-    return (await Notifications.getExpoPushTokenAsync()).data;
-  } catch {
-    return null;
+  return status === "granted";
+}
+function isWithinQuietHours(
+  when: Date,
+  prefs: Awaited<ReturnType<typeof getLocalPreferences>>,
+) {
+  const hour = when.getHours();
+  const start = prefs.quietHoursStart;
+  const end = prefs.quietHoursEnd;
+
+  if (start === end) return false;
+
+  if (start < end) {
+    return hour >= start && hour < end;
   }
-}
 
-export async function scheduleDailyRituals(briefingHour = 8, reviewHour = 22) {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'Good morning from Eagle', body: 'Your day is ready. Open your Morning Briefing.', data: { route: '/' }, sound: 'default' },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, hour: briefingHour, minute: 0, repeats: true },
-  });
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'Nightly Review', body: 'Close the loop before midnight. Eagle is here when you are.', data: { route: '/review' }, sound: 'default' },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, hour: reviewHour, minute: 0, repeats: true },
-  });
+  return hour >= start || hour < end;
 }
-
 export async function openMeeting(provider: 'zoom' | 'meet', url?: string) {
   const target = url || (provider === 'zoom' ? 'https://zoom.us/join' : 'https://meet.google.com/');
   if (await Linking.canOpenURL(target)) {
@@ -70,15 +69,15 @@ export async function scheduleCommitmentMeeting(title: string, date: string, tim
   const content = { data: { meetingProvider: provider, meetingUrl: target }, sound: 'default' as const };
 
   if (!muteWarning) {
-    await Notifications.scheduleNotificationAsync({
+    await (await getNotifications()).scheduleNotificationAsync({
       content: { ...content, title: 'Five-minute heads-up', body: `${title} starts in five minutes. Get ready to join.` },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: warningDate },
+      trigger: { type: (await getNotifications()).SchedulableTriggerInputTypes.DATE, date: warningDate },
     });
   }
 
-  await Notifications.scheduleNotificationAsync({
+  await (await getNotifications()).scheduleNotificationAsync({
     content: { ...content, title: `${provider === 'zoom' ? 'Zoom' : 'Google Meet'} time`, body: title },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: meetingDate },
+    trigger: { type: (await getNotifications()).SchedulableTriggerInputTypes.DATE, date: meetingDate },
   });
 }
 
@@ -105,7 +104,7 @@ export async function scheduleCriticalCascade(commitmentId: string, title: strin
       ? `One day left to finish "${title}". Tap to confirm you're still on track.`
       : `Three hours left for "${title}". Eagle needs a quick acknowledgment.`;
 
-    const id = await Notifications.scheduleNotificationAsync({
+    const id = await (await getNotifications()).scheduleNotificationAsync({
       content: {
         title: 'Eagle · Don\'t let me forget',
         body,
@@ -113,7 +112,7 @@ export async function scheduleCriticalCascade(commitmentId: string, title: strin
         sound: 'default',
         categoryIdentifier: 'checkpoint-action',
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+      trigger: { type: (await getNotifications()).SchedulableTriggerInputTypes.DATE, date: when },
     });
     ids.push(id);
   }
@@ -123,7 +122,12 @@ export async function scheduleCriticalCascade(commitmentId: string, title: strin
 
 export async function cancelCriticalCascade(ids: string[]) {
   if (!ids.length) return;
-  await Promise.all(ids.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined)));
+const Notifications = await getNotifications();
+  await Promise.all(
+    ids.map((id) =>
+      Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined),
+    ),
+  );
 }
 
 export async function speakCheckpointEscalation(title: string, stage: 'day_before' | 'three_hours') {

@@ -9,7 +9,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { AuthGate } from "@/components/auth-gate";
 import { completeOAuthFromUrl } from "@/lib/_core/auth";
-import { CheckpointNotificationListener } from "@/lib/notification-listener";
 
 function DeepLinkAuthListener() {
   const utils = trpc.useUtils();
@@ -46,7 +45,6 @@ export default function RootLayout() {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <DeepLinkAuthListener />
-          <CheckpointNotificationListener />
           <AuthGate>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />

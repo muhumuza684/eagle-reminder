@@ -1,4 +1,4 @@
-// MERGED (round 2) â€” base is the "d_full" build's index.tsx (voice capture,
+﻿// MERGED (round 2) Ã¢â‚¬â€ base is the "d_full" build's index.tsx (voice capture,
 // meeting integration, the natural-language "don't let me forget" capture +
 // ambiguous-deadline prompt, real criticalDeadline/warningMuted cloud sync).
 // Grafted in from the "e_complete" build: the FR-G3 acknowledge/escalate/
@@ -9,7 +9,7 @@
 // including one real, honestly-flagged gap: checkpoint acknowledgments are
 // not yet synced to the server, because the client only tracks checkpoints
 // by commitment id, not by their own row id in the criticalCheckpoints
-// table â€” search "known gap" in this file and in MERGE-NOTES.md.
+// table Ã¢â‚¬â€ search "known gap" in this file and in MERGE-NOTES.md.
 
 import AsyncStorage from "@/lib/secure-storage";
 import { readJsonSafely, writeJsonSafely } from "@/lib/safe-json";
@@ -41,7 +41,7 @@ import {
   shouldEscalate,
   type Checkpoint,
 } from "@/lib/critical-cascade";
-import { cancelCriticalCascade, openMeeting, registerForNotifications, scheduleCommitmentMeeting, scheduleCriticalCascade, speakCheckpointEscalation, speakEagle } from "@/lib/native-services";
+import { cancelCriticalCascade, openMeeting, scheduleCommitmentMeeting, scheduleCriticalCascade, speakCheckpointEscalation, speakEagle } from "@/lib/native-services";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { recordTodaySnapshot } from "@/lib/weekly-snapshots";
@@ -53,8 +53,6 @@ import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
 import { CountdownHero } from "@/components/countdown-hero";
-import { DayStrip } from "@/components/day-strip";
-import { CommitmentSheet } from "@/components/bottom-sheet";
 import { SignalModal } from "@/components/signal-modal";
 import { CommitmentProfileModal } from "@/components/commitment-profile-modal";
 import { getCommitmentBeliefs, correctBelief, type HistoryItem } from "@/lib/intelligence/beliefs";
@@ -70,7 +68,7 @@ type Commitment = {
   id: string;
   title: string;
   category: string;
-  // Tier 3 #11 â€” was missing entirely; see commitment-parser.ts's
+  // Tier 3 #11 Ã¢â‚¬â€ was missing entirely; see commitment-parser.ts's
   // ParsedCommitment for the full story of what this fixes.
   scheduledDate: string;
   timeStart: string;
@@ -97,12 +95,12 @@ type Commitment = {
 const STORAGE_KEY = "deagle-commitments-v1";
 const CHECKPOINTS_STORAGE_KEY = "deagle-checkpoints-v1";
 const ONBOARDING_KEY = "deagle-onboarded-v1";
-// Tier 3 #9 â€” kept to four short slides matching the product's own
+// Tier 3 #9 Ã¢â‚¬â€ kept to four short slides matching the product's own
 // "silence is a feature" instinct: explain the mechanism, not every screen.
 const ONBOARDING_SLIDES = [
-  { icon: "sparkles-outline" as const, title: "Meet Eagle", body: "Eagle holds your commitments so you don't have to carry them in your head. Capture in plain language â€” Eagle handles the rest." },
-  { icon: "layers-outline" as const, title: "Six a day, on purpose", body: "Only six active commitments at a time. Add a seventh and Eagle suggests the lowest-risk one to move to tomorrow â€” not a decision you have to make yourself." },
-  { icon: "flag-outline" as const, title: "Don't let me forget", body: "Flag something critical and Eagle sets two checkpoints â€” one day before, three hours before â€” and escalates with a voice alert if either goes unacknowledged." },
+  { icon: "sparkles-outline" as const, title: "Meet Eagle", body: "Eagle holds your commitments so you don't have to carry them in your head. Capture in plain language Ã¢â‚¬â€ Eagle handles the rest." },
+  { icon: "layers-outline" as const, title: "Six a day, on purpose", body: "Only six active commitments at a time. Add a seventh and Eagle suggests the lowest-risk one to move to tomorrow Ã¢â‚¬â€ not a decision you have to make yourself." },
+  { icon: "flag-outline" as const, title: "Don't let me forget", body: "Flag something critical and Eagle sets two checkpoints Ã¢â‚¬â€ one day before, three hours before Ã¢â‚¬â€ and escalates with a voice alert if either goes unacknowledged." },
   { icon: "moon-outline" as const, title: "One nightly ritual", body: "Anything unmarked by midnight becomes missed, and Eagle asks if you'd like to carry it to tomorrow. That's the one moment worth not skipping." },
 ];
 const today = new Date();
@@ -146,36 +144,21 @@ export default function HomeScreen() {
   const updateCloudCommitment = trpc.commitments.update.useMutation();
   const deleteCloudCommitment = trpc.commitments.delete.useMutation();
   const updateLocale = trpc.auth.updateLocale.useMutation();
-  const registerPushToken = trpc.notifications.registerToken.useMutation();
 
-  // Tier 3 #12 â€” registerForNotifications() (lib/native-services.ts) was
-  // defined but never actually called anywhere in this file; the whole
-  // push-token flow was dead code. Fire-and-forget for the same reason as
-  // the locale-report effect above: a failure here just means server-side
-  // push stays unavailable for this device until next successful launch,
-  // never blocking the user. Local notifications (briefing/review/cascade
-  // scheduling elsewhere in this file) work independently of this.
-  useEffect(() => {
-    if (!isAuthenticated || Platform.OS === "web") return;
-    registerForNotifications().then((token) => {
-      if (token) registerPushToken.mutate({ token, platform: Platform.OS as "ios" | "android" });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
 
-  // Tier 2 #5 â€” reports the device's detected IANA timezone once per
+  // Tier 2 #5 Ã¢â‚¬â€ reports the device's detected IANA timezone once per
   // session (not on every render/tick) so the server can eventually know
   // "8am local" for this user without relying solely on the device's own
   // clock at notification-scheduling time. Deliberately fire-and-forget:
   // a failure here just means the server's stored timezone stays stale
-  // until the next successful launch, which is a fine degradation â€” it
+  // until the next successful launch, which is a fine degradation Ã¢â‚¬â€ it
   // never blocks anything the user is doing.
   useEffect(() => {
     if (!isAuthenticated) return;
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (timezone) updateLocale.mutate({ timezone });
-    } catch { /* Intl unavailable on some old engines â€” non-fatal, just skip. */ }
+    } catch { /* Intl unavailable on some old engines Ã¢â‚¬â€ non-fatal, just skip. */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
   const upsertCloudSnapshot = trpc.snapshots.upsert.useMutation();
@@ -225,11 +208,11 @@ export default function HomeScreen() {
   const [showRescue, setShowRescue] = useState(false);
   const [selected, setSelected] = useState<Commitment | null>(null);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
-  // Tap-once-to-arm, tap-again-to-confirm delete â€” avoids a separate modal
+  // Tap-once-to-arm, tap-again-to-confirm delete Ã¢â‚¬â€ avoids a separate modal
   // for a destructive action while still requiring a deliberate second tap.
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
-  // Tier 3 #9 â€” a new user previously hit the 6-limit, the cascade, and
+  // Tier 3 #9 Ã¢â‚¬â€ a new user previously hit the 6-limit, the cascade, and
   // risk states with zero explanation. Shown once, gated on a local flag;
   // "Show me again" in Settings can reset it (see settings.tsx).
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -311,8 +294,8 @@ export default function HomeScreen() {
   useEffect(() => { writeJsonSafely(CHECKPOINTS_STORAGE_KEY, checkpoints).catch(() => undefined); }, [checkpoints]);
 
   // FR-G3: every 30s (reusing the same tick that drives `now` for meeting
-  // countdowns) escalate any pending checkpoint past its due time â€” voice
-  // alert, once per checkpoint via escalatedRef â€” and expire any checkpoint
+  // countdowns) escalate any pending checkpoint past its due time Ã¢â‚¬â€ voice
+  // alert, once per checkpoint via escalatedRef Ã¢â‚¬â€ and expire any checkpoint
   // still open once the commitment's own deadline has passed, so the Nightly
   // Review can show the cascade as missed rather than silently open forever.
   useEffect(() => {
@@ -334,7 +317,7 @@ export default function HomeScreen() {
               // Deliberately not synced to the server here: `id` is the
               // *commitment's* id, not the checkpoint row's own id in the
               // criticalCheckpoints table (the client doesn't track that
-              // separately yet â€” see MERGE-NOTES.md "known gap"). Firing
+              // separately yet Ã¢â‚¬â€ see MERGE-NOTES.md "known gap"). Firing
               // checkpointUpdateCloud with the wrong id risks silently
               // updating an unrelated row. Local state + the voice alert
               // above are correct either way; cloud sync of this specific
@@ -387,7 +370,7 @@ export default function HomeScreen() {
   // client-side timestamp (see lib/commitment-parser.ts), not the server's
   // real autoincrement row id. Without remapping it once the create call
   // succeeds, every later update() call for that commitment sends the
-  // timestamp as if it were the server's id â€” the WHERE clause matches zero
+  // timestamp as if it were the server's id Ã¢â‚¬â€ the WHERE clause matches zero
   // rows, the update silently no-ops, and nothing ever reaches the server
   // for the rest of that session. This closes that gap.
   const remapCommitmentId = (oldId: string, newId: string) => {
@@ -427,11 +410,11 @@ export default function HomeScreen() {
   };
   const clearSyncFailed = (id: string) => setCommitments((items) => items.map((item) => (item.id === id ? { ...item, syncFailed: false } : item)));
 
-  // Tier 1 #3 â€” previously a mis-capture could never actually be removed,
+  // Tier 1 #3 Ã¢â‚¬â€ previously a mis-capture could never actually be removed,
   // only reassigned a status. Tears down every piece of state a commitment
   // can be referenced from: local list, checkpoints map, scheduled local
-  // notifications, and â€” if it made it to the server â€” the cloud row.
-  // Tier 3 #10 â€” ids removed locally this session, so a cloud refetch
+  // notifications, and Ã¢â‚¬â€ if it made it to the server Ã¢â‚¬â€ the cloud row.
+  // Tier 3 #10 Ã¢â‚¬â€ ids removed locally this session, so a cloud refetch
   // (which may not yet reflect an in-flight or failed delete) never
   // silently resurrects them. See lib/commitment-sync.ts.
   const suppressedIdsRef = useRef<Set<string>>(new Set());
@@ -458,7 +441,7 @@ export default function HomeScreen() {
     suppressedIdsRef.current.add(id);
     setCommitments((items) => items.filter((item) => item.id !== id));
     if (isAuthenticated && /^\d+$/.test(id) && id.length < 13) {
-      deleteCloudCommitment.mutate({ id: Number(id) }, { onError: () => setSyncNotice("Removed here, but the cloud copy may still exist â€” worth checking when back online.") });
+      deleteCloudCommitment.mutate({ id: Number(id) }, { onError: () => setSyncNotice("Removed here, but the cloud copy may still exist Ã¢â‚¬â€ worth checking when back online.") });
     }
   };
 
@@ -497,7 +480,7 @@ export default function HomeScreen() {
     if (isAuthenticated && /^\d+$/.test(id)) {
       updateCloudCommitment.mutate(
         { id: Number(id), status: patch.status, riskState: patch.riskState, critical: patch.critical, criticalDeadline: "criticalDeadline" in patch ? patch.criticalDeadline ?? null : undefined, meetingProvider: patch.meetingProvider, meetingUrl: patch.meetingUrl, warningMuted: "warningMuted" in patch ? patch.warningMuted ?? null : undefined },
-        { onSuccess: () => clearSyncFailed(id), onError: () => markSyncFailed(id, "Couldn't sync that change â€” Eagle will retry shortly.") }
+        { onSuccess: () => clearSyncFailed(id), onError: () => markSyncFailed(id, "Couldn't sync that change Ã¢â‚¬â€ Eagle will retry shortly.") }
       );
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -511,7 +494,7 @@ export default function HomeScreen() {
     if (!isAuthenticated) return;
     commitments.filter((item) => item.syncFailed).forEach((item) => {
       if (/^\d+$/.test(item.id) && item.id.length < 13) {
-        // Real server id (small autoincrement int, not a 13-digit ms timestamp) â€” retry update.
+        // Real server id (small autoincrement int, not a 13-digit ms timestamp) Ã¢â‚¬â€ retry update.
         updateCloudCommitment.mutate(
           { id: Number(item.id), status: item.status, riskState: item.riskState, critical: item.critical, criticalDeadline: item.criticalDeadline ?? null, meetingProvider: item.meetingProvider, meetingUrl: item.meetingUrl, warningMuted: item.warningMuted ?? null },
           { onSuccess: () => clearSyncFailed(item.id), onError: () => undefined }
@@ -527,7 +510,7 @@ export default function HomeScreen() {
   }, [now, isAuthenticated]);
 
   const commitCritical = (deadline: Date, titleOverride?: string) => {
-    // Named distinctly from the `checkpoints` state above â€” this is just the
+    // Named distinctly from the `checkpoints` state above Ã¢â‚¬â€ this is just the
     // two rows for *this* commitment, not the whole id-keyed map.
     const builtCheckpoints = buildCriticalCheckpoints(deadline);
     const title = titleOverride ?? pendingCriticalTitle;
@@ -537,7 +520,7 @@ export default function HomeScreen() {
       setCommitments((items) => [...items, next]);
       if (isAuthenticated) createCloudCommitment.mutate(
         { title: next.title, category: next.category, scheduledDate: new Date().toISOString().slice(0, 10), timeStart: next.timeStart, timeEnd: next.timeEnd, priority: next.priority, status: next.status, riskState: next.riskState, critical: true, criticalDeadline: deadline.toISOString() },
-        { onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)), onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet â€” Eagle will retry.") }
+        { onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)), onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet Ã¢â‚¬â€ Eagle will retry.") }
       );
       setCheckpoints((all) => ({ ...all, [next.id]: builtCheckpoints }));
       scheduleCriticalCascade(next.id, next.title, builtCheckpoints).then((ids) => { criticalNotificationIds.current[next.id] = ids; });
@@ -626,20 +609,41 @@ export default function HomeScreen() {
       return;
     }
     const extracted = extractMeetingLink(capture); const link = meetingUrl.trim() ? { provider: meetingProvider, url: normalizeMeetingUrl(meetingUrl) } : extracted; const linkError = link ? validateMeetingUrl(link.url, link.provider) : null; if (linkError) { setMeetingError(linkError); return; } const parsed = parseCommitment(capture);
-    const withPickedTime = pickedDate ? { ...parsed, scheduledDate: localDateKey(pickedDate), timeStart: `${String(pickedDate.getHours()).padStart(2, "0")}:${String(pickedDate.getMinutes()).padStart(2, "0")}` } : parsed;
-    const next = { ...withPickedTime, meetingProvider: link?.provider, meetingUrl: link?.url }; setCommitments((items) => [...items, next]);
+    const withPickedTime = pickedDate
+      ? {
+          ...parsed,
+          scheduledDate: localDateKey(pickedDate),
+          timeStart: `${String(pickedDate.getHours()).padStart(2, "0")}:${String(pickedDate.getMinutes()).padStart(2, "0")}`,
+        }
+      : parsed;
+    const next = {
+      ...withPickedTime,
+      meetingProvider: link?.provider,
+      meetingUrl: link?.url,
+    };
+    setCommitments((items) => [...items, next]);
     if (isAuthenticated) createCloudCommitment.mutate(
-      { title: next.title, category: next.category, scheduledDate: new Date().toISOString().slice(0, 10), timeStart: next.timeStart, timeEnd: next.timeEnd, priority: next.priority, status: next.status, riskState: next.riskState, critical: false, meetingProvider: meetingUrl.trim() ? meetingProvider : undefined, meetingUrl: meetingUrl.trim() || undefined },
-      { onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)), onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet â€” Eagle will retry.") }
+      {
+        title: next.title,
+        category: next.category,
+        scheduledDate: next.scheduledDate,
+        timeStart: next.timeStart,
+        timeEnd: next.timeEnd,
+        priority: next.priority,
+        status: next.status,
+        riskState: next.riskState,
+        critical: false,
+        meetingProvider: link?.provider,
+        meetingUrl: link?.url,
+      },
+      {
+        onSuccess: (serverId) => remapCommitmentId(next.id, String(serverId)),
+        onError: () => markSyncFailed(next.id, "Couldn't save this to the cloud yet -- Eagle will retry."),
+      }
     );
     setCapture("");
     setMeetingUrl("");
     setPickedDate(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  const moveMissedToTomorrow = () => {
-    setCommitments((items) => items.map((item) => item.status === "missed" ? { ...item, status: "rescheduled", riskState: "rescued" } : item));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -649,8 +653,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>D-EAGLE HUB</Text>
-            <Text style={[styles.title, { color: colors.foreground }]}>Good morning, Alex.</Text>
-            <Text style={[styles.date, { color: colors.muted }]}>{dateLabel}</Text>
+<Text style={[styles.date, { color: colors.muted }]}>{dateLabel}</Text>
           </View>
           <Pressable onPress={() => { if (profileUnlocked) setShowProfile(true); }}><View style={[styles.avatar, { backgroundColor: colors.primary }]}><Text style={styles.avatarText}>A</Text></View></Pressable>
         </View>
@@ -659,80 +662,265 @@ export default function HomeScreen() {
 
 
 
-        {nextMeeting && <Pressable onPress={() => openMeeting(nextMeeting.meetingProvider!, nextMeeting.meetingUrl)} style={({ pressed }) => [styles.quickJoin, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="videocam" size={18} color="#FFFFFF" /><View style={styles.quickJoinCopy}><Text style={styles.quickJoinTitle}>Join {nextMeeting.meetingProvider === "zoom" ? "Zoom" : "Google Meet"} soon</Text><Text style={styles.quickJoinBody}>{nextMeeting.title} | {nextMeeting.minutesUntil === 0 ? "starting now" : `starts in ${nextMeeting.minutesUntil} min`} | {nextMeeting.timeStart}</Text></View><Ionicons name="arrow-forward" size={17} color="#FFFFFF" /></Pressable>}
-
-        <CountdownHero
-          next={atRisk ? { title: atRisk.title, timeStart: atRisk.timeStart, riskExplanation: atRiskPrediction?.explanation ?? null } : null}
-          onDone={() => { if (atRisk) update(atRisk.id, { status: "completed", riskState: "stable" }); }}
-          onSnooze={() => { if (atRisk) { setSelected(atRisk); speakEagle(`${atRisk.title} starts at ${atRisk.timeStart}.`); } } }
-        />
-
-        <View style={styles.sectionHeader}><View><Text style={[styles.sectionTitle, { color: colors.foreground }]}>On your radar</Text><Text style={[styles.sectionSub, { color: colors.muted }]}>Six is the ceiling. Clarity is the goal.</Text></View><Text style={[styles.count, { color: colors.primary }]}>{active.length}/6</Text></View>
-
-        <View style={styles.timeline}>
-          {active.map((item, index) => <Pressable key={item.id} onPress={() => { setSelected(item); setDeleteConfirmId(null); }} style={({ pressed }) => [styles.commitmentRow, pressed && styles.pressed]}>
-            <View style={styles.timeCol}><Text style={[styles.time, { color: colors.foreground }]}>{item.timeStart}</Text><Text style={[styles.timeEnd, { color: colors.muted }]}>{item.timeEnd}</Text></View>
-            <View style={[styles.timelineLine, { backgroundColor: colors.border }]}><View style={[styles.timelineDot, { backgroundColor: item.riskState === "at_risk" ? "#78BDC4" : colors.primary }]} /></View>
-            <View style={[styles.commitmentCard, { backgroundColor: colors.surface, borderColor: item.riskState === "at_risk" ? "#78BDC4" : colors.border }]}>
-              <View style={styles.cardTop}><View style={styles.categoryPill}><Text style={[styles.categoryText, { color: colors.primary }]}>{item.category}</Text></View><View style={styles.cardIcons}>{item.warningMuted === false && <Ionicons name="alarm-outline" size={14} color={colors.primary} />}{item.meetingUrl && <Pressable {...({ title: item.meetingProvider === "zoom" ? "Zoom meeting" : "Google Meet meeting" } as any)} accessibilityLabel={item.meetingProvider === "zoom" ? "Zoom meeting link saved" : "Google Meet meeting link saved"}><Ionicons name="videocam-outline" size={15} color={colors.primary} /></Pressable>}{item.critical && <Ionicons name="flag" size={14} color={cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color} />}{item.syncFailed && <Ionicons name="cloud-offline-outline" size={14} color="#F8444F" accessibilityLabel="Not yet synced â€” Eagle will retry" />}</View></View>
-              <Text style={[styles.commitmentTitle, { color: colors.foreground }]}>{item.title}</Text>
-              {item.critical && cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label ? <Text style={{ fontSize: 10, fontWeight: "700", marginTop: 6, color: cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color }}>{cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label}</Text> : null}
-              <View style={styles.cardBottom}><View style={styles.riskWrap}><View style={[styles.smallDot, { backgroundColor: item.riskState === "at_risk" ? "#78BDC4" : colors.primary }]} /><Text style={[styles.riskText, { color: item.riskState === "at_risk" ? "#9B6A00" : colors.muted }]}>{riskCopy(item.riskState)}</Text></View><Text style={[styles.priority, { color: item.priority === "high" ? "#F8444F" : colors.muted }]}>{item.priority} priority</Text></View>
-            </View>
-          </Pressable>)}
-          {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={styles.empty}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyBody, { color: colors.muted, marginTop: 10 }]}>Loading today...</Text></View>}
-          {!(isAuthenticated && cloudCommitments.isLoading && commitments.length === 0) && active.length === 0 && <View style={styles.empty}><Ionicons name="moon-outline" size={28} color={colors.primary} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your radar is clear.</Text><Text style={[styles.emptyBody, { color: colors.muted }]}>Capture what matters, then let Eagle hold it.</Text></View>}
-        </View>
-
         <View style={[styles.captureCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TextInput value={capture} onChangeText={setCapture} onSubmitEditing={addCommitment} returnKeyType="done" placeholder="What do you need to hold?" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground }]} />
+          <TextInput value={capture} onChangeText={setCapture} onSubmitEditing={addCommitment} returnKeyType="done" placeholder="What needs to happen?" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground }]} />
           <Pressable onPress={() => setDatePickerStage("date")} accessibilityLabel="Pick a date and time" style={({ pressed }) => [styles.micButton, { backgroundColor: pickedDate ? colors.primary : colors.border }, pressed && styles.pressed]}><Ionicons name="calendar-outline" size={16} color={pickedDate ? "#FFFFFF" : colors.foreground} /></Pressable>
           <Animated.View style={{ transform: [{ scale: pulse }] }}><Pressable onPress={toggleVoiceCapture} accessibilityLabel={isListening ? "Stop listening" : "Start voice capture"} style={({ pressed }) => [styles.micButton, { backgroundColor: isListening ? "#F8444F" : colors.border }, pressed && styles.pressed]}><Ionicons name={isListening ? "stop" : "mic"} size={17} color={isListening ? "#FFFFFF" : colors.foreground} /></Pressable></Animated.View><Pressable onPress={addCommitment} disabled={!capture.trim() || createCloudCommitment.isPending} style={({ pressed }) => [styles.sendButton, { backgroundColor: capture.trim() ? colors.primary : colors.border }, pressed && styles.pressed]}>{createCloudCommitment.isPending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="arrow-up" size={18} color="#FFFFFF" />}</Pressable>
+
+
         </View>
         {pickedDate ? <View style={styles.pickedChip}><Ionicons name="calendar" size={12} color={colors.primary} /><Text style={[styles.pickedChipText, { color: colors.primary }]}>{pickedDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at {pickedDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</Text><Pressable onPress={() => setPickedDate(null)}><Ionicons name="close-circle" size={14} color={colors.muted} /></Pressable></View> : null}
         {datePickerStage === "date" ? <DateTimeField value={pickedDate ?? new Date()} mode="date" onChange={(date) => { if (date) { setPickedDate(date); setDatePickerStage("time"); } else { setDatePickerStage(null); } }} /> : null}
         {datePickerStage === "time" ? <DateTimeField value={pickedDate ?? new Date()} mode="time" onChange={(date) => { if (date && pickedDate) { const merged = new Date(pickedDate); merged.setHours(date.getHours(), date.getMinutes()); setPickedDate(merged); } setDatePickerStage(null); }} /> : null}
         {showMeetingUrlField ? <View style={styles.meetingCapture}><View style={styles.providerRow}><Pressable onPress={() => setMeetingProvider("zoom")} style={[styles.providerChip, { backgroundColor: meetingProvider === "zoom" ? "#2D8CFF" : colors.border }]}><Text style={styles.providerText}>Zoom</Text></Pressable><Pressable onPress={() => setMeetingProvider("meet")} style={[styles.providerChip, { backgroundColor: meetingProvider === "meet" ? "#012C3D" : colors.border }]}><Text style={styles.providerText}>Google Meet</Text></Pressable></View><TextInput value={meetingUrl} onChangeText={(value) => { setMeetingUrl(value); setMeetingError(""); }} onEndEditing={() => setMeetingUrl(normalizeMeetingUrl(meetingUrl))} autoCapitalize="none" keyboardType="url" placeholder={editingVoiceLink ? "Edit detected meeting URL" : "Optional meeting URL for this task"} placeholderTextColor={colors.muted} style={[styles.meetingInput, { color: colors.foreground, borderColor: meetingError ? "#F8444F" : colors.border }]} />{meetingError ? <Text style={styles.meetingError}>{meetingError}</Text> : null}</View> : <Pressable onPress={() => setShowMeetingUrlField(true)} style={({ pressed }) => [styles.addMeetingLink, pressed && styles.pressed]}><Ionicons name="link-outline" size={14} color={colors.primary} /><Text style={[styles.addMeetingLinkText, { color: colors.primary }]}>Add a meeting link</Text></Pressable>}<Text style={[styles.captureHint, { color: colors.muted }]}>Try "Call Mum tomorrow at 7 pm"</Text>
+        {nextMeeting && <Pressable onPress={() => openMeeting(nextMeeting.meetingProvider!, nextMeeting.meetingUrl)} style={({ pressed }) => [styles.quickJoin, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="videocam" size={18} color="#FFFFFF" /><View style={styles.quickJoinCopy}><Text style={styles.quickJoinTitle}>Join {nextMeeting.meetingProvider === "zoom" ? "Zoom" : "Google Meet"} soon</Text><Text style={styles.quickJoinBody}>{nextMeeting.title} | {nextMeeting.minutesUntil === 0 ? "starting now" : `starts in ${nextMeeting.minutesUntil} min`} | {nextMeeting.timeStart}</Text></View><Ionicons name="arrow-forward" size={17} color="#FFFFFF" /></Pressable>}
+
+
+        <View style={styles.timeline}>
+          {active.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.commitmentRow,
+                {
+                  minHeight: 0,
+                  alignItems: "stretch",
+                },
+              ]}
+            >
+              <View style={styles.timeCol}>
+                <Text style={[styles.time, { color: colors.foreground }]}>{item.timeStart}</Text>
+                <Text style={[styles.timeEnd, { color: colors.muted }]}>{item.timeEnd}</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.timelineLine,
+                  { backgroundColor: colors.border },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.timelineDot,
+                    {
+                      backgroundColor: item.riskState === "at_risk" ? "#78BDC4" : colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.commitmentCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: item.riskState === "at_risk" ? "#78BDC4" : colors.border,
+                    paddingBottom: 0,
+                  },
+                ]}
+              >
+                <Pressable
+                  onPress={() => {
+                    setSelected(item);
+                    setDeleteConfirmId(null);
+                  }}
+                  accessibilityLabel={`Open details for ${item.title}`}
+                  style={({ pressed }) => [pressed && styles.pressed]}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.categoryPill}>
+                      <Text style={[styles.categoryText, { color: colors.primary }]}>
+                        {item.category}
+                      </Text>
+                    </View>
+
+                    <View style={styles.cardIcons}>
+                      {item.warningMuted === false && (
+                        <Ionicons name="alarm-outline" size={14} color={colors.primary} />
+                      )}
+
+                      {item.meetingUrl && (
+                        <Pressable
+                          accessibilityLabel={
+                            item.meetingProvider === "zoom"
+                              ? "Zoom meeting link saved"
+                              : "Google Meet meeting link saved"
+                          }
+                          onPress={() => openMeeting(item.meetingProvider!, item.meetingUrl!)}
+                        >
+                          <Ionicons name="videocam-outline" size={15} color={colors.primary} />
+                        </Pressable>
+                      )}
+
+                      {item.critical && (
+                        <Ionicons
+                          name="flag"
+                          size={14}
+                          color={cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color}
+                        />
+                      )}
+
+                      {item.syncFailed && (
+                        <Ionicons
+                          name="cloud-offline-outline"
+                          size={14}
+                          color="#F8444F"
+                          accessibilityLabel="Not yet synced. Eagle will retry."
+                        />
+                      )}
+                    </View>
+                  </View>
+
+                  <Text style={[styles.commitmentTitle, { color: colors.foreground }]}>
+                    {item.title}
+                  </Text>
+
+                  {item.critical && cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label ? (
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        marginTop: 6,
+                        color: cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).color,
+                      }}
+                    >
+                      {cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])).label}
+                    </Text>
+                  ) : null}
+
+                  <View style={styles.cardBottom}>
+                    <View style={styles.riskWrap}>
+                      <View
+                        style={[
+                          styles.smallDot,
+                          {
+                            backgroundColor: item.riskState === "at_risk" ? "#78BDC4" : colors.primary,
+                          },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.riskText,
+                          {
+                            color: item.riskState === "at_risk" ? "#9B6A00" : colors.muted,
+                          },
+                        ]}
+                      >
+                        {riskCopy(item.riskState)}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.priority,
+                        {
+                          color: item.priority === "high" ? "#F8444F" : colors.muted,
+                        },
+                      ]}
+                    >
+                      {item.priority}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 7,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                    marginTop: 10,
+                    paddingTop: 9,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => update(item.id, { status: "completed", riskState: "stable" })}
+                    accessibilityLabel={`Complete ${item.title}`}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 32,
+                        paddingHorizontal: 10,
+                        borderRadius: 10,
+                        backgroundColor: colors.primary,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: "#FFFFFF" }}>
+                      Complete
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+
+                      update(item.id, {
+                        status: "rescheduled",
+                        riskState: "rescued",
+                        scheduledDate: localDateKey(tomorrow),
+                      });
+                    }}
+                    accessibilityLabel={`Reschedule ${item.title} to tomorrow`}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 32,
+                        paddingHorizontal: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons name="time-outline" size={14} color={colors.foreground} />
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.foreground }}>
+                      Reschedule
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setSelected(item);
+                      setDeleteConfirmId(null);
+                    }}
+                    accessibilityLabel={`View details for ${item.title}`}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 32,
+                        paddingHorizontal: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginLeft: "auto",
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.primary }}>
+                      Details
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ))}
+          {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={styles.empty}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyBody, { color: colors.muted, marginTop: 10 }]}>Loading today...</Text></View>}
+        </View>
+
 
       </ScrollView>
-
-      <CommitmentSheet
-        dayCount={`${active.length}/6`}
-        onDayCountPress={() => setShowSignal(true)}
-        peekContent={<>{active.slice(0, 2).map((item) => (<View key={item.id} style={{ flexDirection: "row", gap: 10, paddingVertical: 6 }}><Text style={{ fontSize: 11, color: colors.muted, minWidth: 34 }}>{item.timeStart}</Text><Text style={{ fontSize: 13, color: colors.foreground }}>{item.title}</Text></View>))}</>}
-        expandedContent={<>
-          <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>TODAY OVERVIEW</Text>
-          <DayStrip selectedDateKey={selectedDateKey} onSelectDate={setSelectedDateKey} />
-          <View style={[styles.briefCard, { backgroundColor: colors.foreground, marginTop: spacing.md }]}>
-            <View style={styles.briefTop}><View><Text style={styles.briefKicker}>MORNING BRIEFING</Text><Text style={styles.briefTitle}>Your day, held.</Text></View><Ionicons name="sparkles" size={24} color="#78BDC4" /></View>
-            <Text style={styles.briefBody}>{active.length} commitments on deck. I'll surface the one that needs you most.</Text>
-            <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.max(8, (completedCount / Math.max(commitments.length, 1)) * 100)}%` }]} /></View>
-            <View style={styles.briefMeta}><Text style={styles.briefMetaText}>{completedCount} closed</Text><Text style={styles.briefMetaText}>{Math.max(active.length, 0)} remaining</Text></View>
-          </View>
-          {active.length > 2 ? <>
-            <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>REST OF TODAY</Text>
-            {active.slice(2).map((item) => (
-              <View key={item.id} style={{ flexDirection: "row", gap: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.border }}>
-                <Text style={{ fontSize: 11, color: colors.muted, minWidth: 34 }}>{item.timeStart}</Text>
-                <Text style={{ fontSize: 13, color: colors.foreground, flex: 1 }}>{item.title}</Text>
-              </View>
-            ))}
-          </> : null}
-          <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>NIGHTLY REVIEW | 10:00 PM</Text>
-          <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Let's close the loop.</Text>
-          <Text style={[styles.sheetBody, { color: colors.muted }]}>Anything still open at midnight becomes missed. You can move missed commitments to tomorrow with one tap.</Text>
-          <View style={styles.reviewBuckets}>
-            <ReviewBucket label="Completed" count={completedCount} icon="checkmark-circle" color="#012C3D" colors={colors} />
-            <ReviewBucket label="Rescheduled" count={commitments.filter((i) => i.status === "rescheduled" && !i.deletedAt).length} icon="time" color="#78BDC4" colors={colors} />
-            <ReviewBucket label="Missed" count={commitments.filter((i) => i.status === "missed" && !i.deletedAt).length} icon="close-circle" color="#F8444F" colors={colors} />
-          </View>
-          {commitments.some((item) => item.critical && !item.deletedAt) && <View style={{ marginBottom: 18 }}>
-            <Text style={[styles.meetingEditLabel, { color: colors.muted }]}>CRITICAL CHECKPOINTS</Text>
-            {commitments.filter((item) => item.critical && !item.deletedAt).map((item) => { const status = cascadeCopy(cascadeStatus(checkpoints[item.id] ?? [])); return <View key={item.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}><Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, flex: 1, marginRight: 10 }}>{item.title}</Text><Text style={{ fontSize: 11, fontWeight: "800", color: status.color }}>{status.label || "Scheduling..."}</Text></View>; })}
-          </View>}
-          <Pressable onPress={moveMissedToTomorrow} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.primaryActionText}>Yes, move missed to tomorrow</Text></Pressable>
-        </>}
-      />
 
       {voiceToast ? <View style={[styles.voiceToast, { backgroundColor: colors.foreground }]}><Ionicons name="checkmark-circle" size={16} color="#78BDC4" /><Text style={styles.voiceToastText}>{voiceToast}</Text><Pressable onPress={() => { setVoiceEditUrl(meetingUrl); setVoiceEditProvider(meetingProvider); setShowVoiceEditor(true); setVoiceToast(""); }}><Text style={styles.voiceUndo}>Edit</Text></Pressable><Pressable onPress={() => { if (previousVoiceLink) { setMeetingProvider(previousVoiceLink.provider); setMeetingUrl(previousVoiceLink.url); } else { setMeetingProvider("zoom"); setMeetingUrl(""); } setPreviousVoiceLink(null); setVoiceToast(""); setEditingVoiceLink(false); }}><Text style={styles.voiceUndo}>Undo</Text></Pressable></View> : null}
       {syncNotice ? <View style={[styles.voiceToast, { backgroundColor: "#F8444F", bottom: voiceToast ? 138 : 82 }]}><Ionicons name="cloud-offline-outline" size={16} color="#FFFFFF" /><Text style={styles.voiceToastText}>{syncNotice}</Text></View> : null}
@@ -800,9 +988,6 @@ export default function HomeScreen() {
   );
 }
 
-function ReviewBucket({ label, count, icon, color, colors }: { label: string; count: number; icon: keyof typeof Ionicons.glyphMap; color: string; colors: ReturnType<typeof useColors> }) {
-  return <View style={[styles.bucket, { backgroundColor: colors.surface, borderColor: colors.border }]}><Ionicons name={icon} size={20} color={color} /><Text style={[styles.bucketCount, { color: colors.foreground }]}>{count}</Text><Text style={[styles.bucketLabel, { color: colors.muted }]}>{label}</Text></View>;
-}
 
 const styles = StyleSheet.create({
   content: { paddingTop: spacing.xxl, paddingBottom: spacing.huge },
@@ -812,15 +997,6 @@ const styles = StyleSheet.create({
   date: { ...typography.body, marginTop: spacing.xs },
   avatar: { width: 42, height: 42, borderRadius: radii.pill, alignItems: "center", justifyContent: "center" },
   avatarText: { ...typography.subtitle, color: "#FFFFFF", fontWeight: "800" },
-  briefCard: { borderRadius: radii.sheet, padding: spacing.xl, marginBottom: spacing.lg },
-  briefTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  briefKicker: { ...typography.label, color: "#B5CAC6", marginBottom: spacing.sm },
-  briefTitle: { ...typography.title, color: "#FFFFFF" },
-  briefBody: { ...typography.body, color: "#C8D7D4", marginTop: spacing.md, maxWidth: 280 },
-  progressTrack: { height: 6, backgroundColor: "#36504D", borderRadius: 3, marginTop: spacing.xl, overflow: "hidden" },
-  progressFill: { height: 6, backgroundColor: "#78BDC4", borderRadius: 3 },
-  briefMeta: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm },
-  briefMetaText: { ...typography.caption, color: "#B5CAC6" },
   rescueBanner: { flexDirection: "row", alignItems: "center", padding: spacing.lg, borderRadius: radii.card, borderWidth: 1, marginBottom: spacing.xxl },
   riskDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.md },
   rescueText: { flex: 1 },
@@ -833,24 +1009,24 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.title },
   sectionSub: { ...typography.caption, marginTop: spacing.xs },
   count: { ...typography.bodySmall, fontWeight: "800" },
-  timeline: { gap: spacing.md },
-  commitmentRow: { flexDirection: "row", minHeight: 92 },
-  timeCol: { width: 52, paddingTop: spacing.md },
-  time: { ...typography.bodySmall, fontWeight: "700" },
-  timeEnd: { ...typography.caption, marginTop: spacing.xs },
-  timelineLine: { width: 1, marginHorizontal: spacing.md, position: "relative" },
-  timelineDot: { position: "absolute", width: 9, height: 9, borderRadius: 5, left: -4, top: 15 },
-  commitmentCard: { flex: 1, borderWidth: 1, borderRadius: radii.card, padding: spacing.md },
+  timeline: { gap: spacing.sm },
+  commitmentRow: { flexDirection: "row", minHeight: 0 },
+  timeCol: { width: 48, paddingTop: spacing.sm },
+  time: { ...typography.caption, fontWeight: "800" },
+  timeEnd: { ...typography.caption, marginTop: 2 },
+  timelineLine: { width: 1, marginHorizontal: spacing.sm, position: "relative" },
+  timelineDot: { position: "absolute", width: 8, height: 8, borderRadius: 4, left: -4, top: 14 },
+  commitmentCard: { flex: 1, borderWidth: 1, borderRadius: radii.card, padding: spacing.lg },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardIcons: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  categoryPill: { backgroundColor: "#DDEDEA", borderRadius: radii.chip, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  categoryText: { ...typography.label },
-  commitmentTitle: { ...typography.body, fontWeight: "700", marginTop: spacing.sm },
-  cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md },
-  riskWrap: { flexDirection: "row", alignItems: "center" },
-  smallDot: { width: 6, height: 6, borderRadius: 3, marginRight: spacing.sm },
+  categoryPill: { backgroundColor: "transparent", borderWidth: 1, borderColor: "#DDEDEA", borderRadius: radii.chip, paddingHorizontal: spacing.sm, paddingVertical: 3 },
+  categoryText: { ...typography.label, fontSize: 9 },
+  commitmentTitle: { ...typography.body, fontWeight: "800", marginTop: spacing.md },
+  cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.sm },
+  riskWrap: { flexDirection: "row", alignItems: "center", opacity: 0.9 },
+  smallDot: { width: 5, height: 5, borderRadius: 3, marginRight: spacing.sm },
   riskText: { ...typography.caption, fontWeight: "600" },
-  priority: { ...typography.caption },
+  priority: { ...typography.caption, fontWeight: "700" },
   empty: { alignItems: "center", paddingVertical: spacing.xxxl },
   emptyTitle: { ...typography.subtitle, fontWeight: "700", marginTop: spacing.md },
   emptyBody: { ...typography.bodySmall, marginTop: spacing.xs },
@@ -913,10 +1089,6 @@ const styles = StyleSheet.create({
   flagAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.xl, paddingVertical: spacing.md },
   flagText: { color: "#F8444F", ...typography.bodySmall, fontWeight: "700" },
   criticalMeta: { textAlign: "center", ...typography.caption, marginTop: -6, marginBottom: spacing.xs },
-  reviewBuckets: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xxl, marginBottom: spacing.xxl },
-  bucket: { flex: 1, minHeight: 103, borderRadius: radii.chip + 3, borderWidth: 1, padding: spacing.md },
-  bucketCount: { ...typography.title, marginTop: spacing.sm },
-  bucketLabel: { ...typography.caption, marginTop: spacing.xs },
   meetingActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   meetingButton: { flex: 1, minHeight: 43, borderWidth: 1, borderRadius: radii.chip, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: spacing.sm },
   meetingText: { ...typography.caption, fontWeight: "700" },
@@ -930,26 +1102,3 @@ const styles = StyleSheet.create({
   swapReason: { ...typography.caption, marginTop: spacing.xs },
   wideSheet: { width: "100%", maxWidth: 560, alignSelf: "center" },
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
