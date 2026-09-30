@@ -86,6 +86,9 @@ type Commitment = {
 
 const STORAGE_KEY = "deagle-commitments-v1";
 const CHECKPOINTS_STORAGE_KEY = "deagle-checkpoints-v1";
+const REMINDERS_STORAGE_KEY = "deagle-reminders-v1";
+const DEMO_IDS = new Set(["1", "2", "3"]);
+const DEMO_TITLES = new Set(["Send revised proposal to Maya", "Pick up prescription", "Call Dad about Sunday"]);
 const ONBOARDING_KEY = "deagle-onboarded-v1";
 // Tier 3 #9 Ã¢â‚¬â€ kept to four short slides matching the product's own
 // "silence is a feature" instinct: explain the mechanism, not every screen.
@@ -105,11 +108,7 @@ function localDateKey(d: Date): string {
 const todayKey = localDateKey(today);
 const dateLabel = today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
-const initialCommitments: Commitment[] = [
-  { id: "1", title: "Send revised proposal to Maya", category: "Work", scheduledDate: todayKey, timeStart: "09:30", timeEnd: "10:00", priority: "high", status: "active", riskState: "stable" },
-  { id: "2", title: "Pick up prescription", category: "Health", scheduledDate: todayKey, timeStart: "12:15", timeEnd: "12:45", priority: "medium", status: "active", riskState: "stable" },
-  { id: "3", title: "Call Dad about Sunday", category: "People", scheduledDate: todayKey, timeStart: "18:30", timeEnd: "19:00", priority: "high", status: "active", riskState: "at_risk", critical: true },
-];
+const initialCommitments: Commitment[] = [];
 
 function riskCopy(risk: RiskState) {
   if (risk === "at_risk") return "At risk";
@@ -156,7 +155,7 @@ export default function HomeScreen() {
   const [commitments, setCommitments] = useState<Commitment[]>(initialCommitments);
   const [capture, setCapture] = useState("");
   const [pickedDate, setPickedDate] = useState<Date | null>(null);
-  const [datePickerStage, setDatePickerStage] = useState<"date" | "time" | null>(null);
+  const [editing, setEditing] = useState<{ id: string; when: Date } | null>(null);
   const [meetingUrl, setMeetingUrl] = useState("");
   const [meetingProvider, setMeetingProvider] = useState<"zoom" | "meet">("zoom");
   const [editMeetingUrl, setEditMeetingUrl] = useState("");
@@ -181,6 +180,7 @@ export default function HomeScreen() {
   const criticalNotificationIds = useRef<Record<string, string[]>>({});
   // commitment id -> the id of its scheduled reminder (native notification id or web timer key)
   const reminderIds = useRef<Record<string, string>>({});
+  const saveReminderIds = () => { writeJsonSafely(REMINDERS_STORAGE_KEY, reminderIds.current).catch(() => undefined); };
   // commitment id -> its exactly-two checkpoints (FR-G2/FR-G3 state machine)
   const [checkpoints, setCheckpoints] = useState<Record<string, Checkpoint[]>>({});
   // avoids re-speaking the same checkpoint escalation on every 30s tick
@@ -266,9 +266,17 @@ export default function HomeScreen() {
   }, [isAuthenticated, cloudCommitments.data]);
 
   useEffect(() => {
-    readJsonSafely<Commitment[]>(STORAGE_KEY, initialCommitments, (value): value is Commitment[] => Array.isArray(value)).then((result) => {
-      setCommitments(result.value);
-    });
+    readJsonSafely<Record<string, string>>(REMINDERS_STORAGE_KEY, {}, (value): value is Record<string, string> => typeof value === "object" && value !== null && !Array.isArray(value))
+      .then((stored) => {
+        reminderIds.current = stored.value;
+        return readJsonSafely<Commitment[]>(STORAGE_KEY, initialCommitments, (value): value is Commitment[] => Array.isArray(value));
+      })
+      .then((result) => {
+        const cleaned = result.value.filter((item) => !(DEMO_IDS.has(item.id) && DEMO_TITLES.has(item.title)));
+        setCommitments(cleaned);
+        // Timers and notifications do not survive a restart by themselves: re-arm every open reminder.
+        cleaned.forEach((item) => { applyReminder(item).catch(() => undefined); });
+      });
   }, []);
 
   // Hydrates locally-scheduled checkpoints so a cascade started before the app
@@ -325,10 +333,32 @@ export default function HomeScreen() {
   }, [now, commitments, isAuthenticated]);
 
   useEffect(() => {
-    writeJsonSafely(STORAGE_KEY, commitments).catch(() => undefined);
+    const saveTimer = setTimeout(() => { writeJsonSafely(STORAGE_KEY, commitments).catch(() => undefined); }, 400);
+    return () => clearTimeout(saveTimer);
   }, [commitments]);
 
   const active = useMemo(() => commitments.filter((item) => !item.deletedAt && item.scheduledDate === selectedDateKey && (item.status === "active" || item.status === "rescheduled") && (meetingFilter === "all" || item.meetingProvider === meetingFilter)).sort((a, b) => a.timeStart.localeCompare(b.timeStart)), [commitments, meetingFilter, selectedDateKey]);
+  // Everything still open, soonest first - today, later days and anything overdue.
+  const upcoming = useMemo(
+    () => commitments
+      .filter((item) => !item.deletedAt && (item.status === "active" || item.status === "rescheduled") && (meetingFilter === "all" || item.meetingProvider === meetingFilter))
+      .sort((a, b) => `${a.scheduledDate} ${a.timeStart}`.localeCompare(`${b.scheduledDate} ${b.timeStart}`)),
+    [commitments, meetingFilter],
+  );
+  const currentDayKey = localDateKey(new Date(now));
+  const dayLabel = (dateKey: string): string => {
+    if (dateKey === currentDayKey) return "Today";
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (dateKey === localDateKey(tomorrow)) return "Tomorrow";
+    const [y, m, d] = dateKey.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  };
+  const isOverdue = (item: Commitment): boolean => {
+    const [y, m, d] = item.scheduledDate.split("-").map(Number);
+    const [h, mi] = item.timeStart.split(":").map(Number);
+    return new Date(y, m - 1, d, h, mi, 0, 0).getTime() < now;
+  };
   const nextMeeting = useMemo(() => { const item = active.find((candidate) => { if (!candidate.meetingProvider || !candidate.meetingUrl) return false; const [hour, minute] = candidate.timeStart.split(":").map(Number); const target = new Date(); target.setHours(hour, minute, 0, 0); const diff = Math.ceil((target.getTime() - now) / 60000); return diff >= 0 && diff <= 60; }); if (!item) return null; const [hour, minute] = item.timeStart.split(":").map(Number); const target = new Date(); target.setHours(hour, minute, 0, 0); return { ...item, minutesUntil: Math.max(0, Math.ceil((target.getTime() - now) / 60000)) }; }, [active, now]);
   useEffect(() => { if (!chimeMuted && nextMeeting?.minutesUntil === 0 && chimeMeetingRef.current !== nextMeeting.id) { chimeMeetingRef.current = nextMeeting.id; speakEagle("Your meeting is starting now."); } }, [nextMeeting, chimeMuted]);
 
@@ -347,7 +377,7 @@ export default function HomeScreen() {
     const ids = criticalNotificationIds.current[oldId];
     if (ids) { delete criticalNotificationIds.current[oldId]; criticalNotificationIds.current[newId] = ids; }
     const movedReminder = reminderIds.current[oldId];
-    if (movedReminder) { delete reminderIds.current[oldId]; reminderIds.current[newId] = movedReminder; }
+    if (movedReminder) { delete reminderIds.current[oldId]; reminderIds.current[newId] = movedReminder; saveReminderIds(); }
     // FIX (checkpoint-id sync): checkpoints just moved to `newId` above were
     // built client-side and have no server row id yet. Now that the
     // commitment has a real server id, fetch its checkpoint rows and attach
@@ -406,7 +436,7 @@ export default function HomeScreen() {
 
   const finalizeDelete = (id: string) => {
     const pendingReminder = reminderIds.current[id];
-    if (pendingReminder) { delete reminderIds.current[id]; cancelReminder(pendingReminder).catch(() => undefined); }
+    if (pendingReminder) { delete reminderIds.current[id]; saveReminderIds(); cancelReminder(pendingReminder).catch(() => undefined); }
     const ids = criticalNotificationIds.current[id];
     if (ids) { cancelCriticalCascade(ids); delete criticalNotificationIds.current[id]; }
     setCheckpoints((all) => { if (!(id in all)) return all; const copy = { ...all }; delete copy[id]; return copy; });
@@ -451,13 +481,13 @@ export default function HomeScreen() {
   // schedules a new one for its date and time unless it is done, missed or deleted.
   const applyReminder = async (item: Commitment) => {
     const existing = reminderIds.current[item.id];
-    if (existing) { delete reminderIds.current[item.id]; await cancelReminder(existing); }
+    if (existing) { delete reminderIds.current[item.id]; await cancelReminder(existing); saveReminderIds(); }
     if (item.deletedAt || item.status === "completed" || item.status === "missed") return;
     const [year, month, day] = item.scheduledDate.split("-").map(Number);
     const [hour, minute] = item.timeStart.split(":").map(Number);
     if ([year, month, day, hour, minute].some((part) => Number.isNaN(part))) return;
     const scheduledId = await scheduleReminder(item.id, item.title, new Date(year, month - 1, day, hour, minute, 0, 0));
-    if (scheduledId) reminderIds.current[item.id] = scheduledId;
+    if (scheduledId) { reminderIds.current[item.id] = scheduledId; saveReminderIds(); }
   };
 
   const update = (id: string, patch: Partial<Commitment>) => {
@@ -664,7 +694,7 @@ export default function HomeScreen() {
 
 
         <View style={styles.timeline}>
-          {active.map((item) => (
+          {upcoming.map((item) => (
             <View
               key={item.id}
               style={[
@@ -676,8 +706,8 @@ export default function HomeScreen() {
               ]}
             >
               <View style={styles.timeCol}>
+                <Text style={[styles.timeEnd, { color: isOverdue(item) ? "#F8444F" : colors.primary, fontWeight: "800" }]}>{isOverdue(item) ? "Overdue" : dayLabel(item.scheduledDate)}</Text>
                 <Text style={[styles.time, { color: colors.foreground }]}>{item.timeStart}</Text>
-                <Text style={[styles.timeEnd, { color: colors.muted }]}>{item.timeEnd}</Text>
               </View>
 
               <View
@@ -877,6 +907,17 @@ export default function HomeScreen() {
                       Reschedule
                     </Text>
                   </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const later = new Date(Date.now() + 10 * 60 * 1000);
+                      update(item.id, { status: "active", scheduledDate: localDateKey(later), timeStart: formatHHMM(later), timeEnd: formatHHMM(new Date(later.getTime() + 30 * 60 * 1000)) });
+                    }}
+                    accessibilityLabel={`Snooze ${item.title} for 10 minutes`}
+                    style={({ pressed }) => [{ minHeight: 32, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="alarm-outline" size={14} color={colors.foreground} />
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.foreground }}>Snooze 10m</Text>
+                  </Pressable>
 
                   <Pressable
                     onPress={() => {
@@ -903,6 +944,7 @@ export default function HomeScreen() {
               </View>
             </View>
           ))}
+          {upcoming.length === 0 && !(isAuthenticated && cloudCommitments.isLoading) ? <View style={styles.empty}><Ionicons name="alarm-outline" size={30} color={colors.muted} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>No reminders yet</Text><Text style={[styles.emptyBody, { color: colors.muted, textAlign: "center" }]}>Type what to remember, pick a day and time, then tap Set reminder.</Text></View> : null}
           {isAuthenticated && cloudCommitments.isLoading && commitments.length === 0 && <View style={styles.empty}><ActivityIndicator color={colors.primary} /><Text style={[styles.emptyBody, { color: colors.muted, marginTop: 10 }]}>Loading today...</Text></View>}
         </View>
 
@@ -919,6 +961,7 @@ export default function HomeScreen() {
         <View style={styles.modalBackdrop}><View style={[styles.sheet, { backgroundColor: colors.background }, isWideWindow ? styles.wideSheet : null]}>
           {selected && <><View style={styles.sheetHandle} /><Text style={[styles.sheetEyebrow, { color: colors.primary }]}>{selected.category.toUpperCase()} | {selected.timeStart}</Text><Text style={[styles.sheetTitle, { color: colors.foreground }]}>{selected.title}</Text><Text style={[styles.sheetBody, { color: colors.muted }]}>This commitment is {riskCopy(selected.riskState).toLowerCase()}. Eagle will keep an eye on it without adding noise.</Text>
             <View style={styles.sheetActions}><Pressable onPress={() => { update(selected.id, { status: "completed", riskState: "stable" }); setSelected(null); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Ionicons name="checkmark" size={18} color="#FFFFFF" /><Text style={styles.primaryActionText}>Complete</Text></Pressable><Pressable onPress={() => { update(selected.id, { status: "rescheduled", riskState: "rescued" }); setSelected(null); }} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Defer</Text></Pressable></View>
+            <Pressable onPress={() => { const [y, mo, d] = selected.scheduledDate.split("-").map(Number); const [h, mi] = selected.timeStart.split(":").map(Number); let when = new Date(y, mo - 1, d, h, mi, 0, 0); if (when.getTime() < Date.now()) { when = new Date(); when.setHours(when.getHours() + 1, 0, 0, 0); } setEditing({ id: selected.id, when }); setSelected(null); }} style={({ pressed }) => [styles.moreOptionsToggle, pressed && styles.pressed]}><Ionicons name="time-outline" size={14} color={colors.primary} /><Text style={[styles.moreOptionsText, { color: colors.primary }]}>Change date or time</Text></Pressable>
             <Pressable onPress={() => setShowMoreDetails((v) => !v)} style={({ pressed }) => [styles.moreOptionsToggle, pressed && styles.pressed]}><Text style={[styles.moreOptionsText, { color: colors.primary }]}>{showMoreDetails ? "Hide details" : "More options"}</Text><Ionicons name={showMoreDetails ? "chevron-up" : "chevron-down"} size={14} color={colors.primary} /></Pressable>
             {showMoreDetails ? <><Text style={[styles.meetingEditLabel, { color: colors.muted }]}>MEETING DETAILS</Text><View style={styles.providerRow}><Pressable onPress={() => setEditMeetingProvider("zoom")} style={[styles.providerChip, { backgroundColor: editMeetingProvider === "zoom" ? "#2D8CFF" : colors.border }]}><Text style={styles.providerText}>Zoom</Text></Pressable><Pressable onPress={() => setEditMeetingProvider("meet")} style={[styles.providerChip, { backgroundColor: editMeetingProvider === "meet" ? "#012C3D" : colors.border }]}><Text style={styles.providerText}>Google Meet</Text></Pressable></View><TextInput value={editMeetingUrl} onChangeText={(value) => { setEditMeetingUrl(value); setMeetingError(""); }} onEndEditing={() => setEditMeetingUrl(normalizeMeetingUrl(editMeetingUrl))} autoCapitalize="none" keyboardType="url" placeholder="Paste a meeting URL" placeholderTextColor={colors.muted} style={[styles.meetingInput, { color: colors.foreground, borderColor: meetingError ? "#F8444F" : colors.border }]} />{meetingError ? <Text style={styles.meetingError}>{meetingError}</Text> : null}<View style={styles.meetingEditActions}><Pressable onPress={() => { const error = validateMeetingUrl(editMeetingUrl, editMeetingProvider); if (error) { setMeetingError(error); return; } update(selected.id, { meetingProvider: editMeetingUrl.trim() ? editMeetingProvider : undefined, meetingUrl: editMeetingUrl.trim() || undefined, warningMuted: editWarningMuted }); setSelected({ ...selected, meetingProvider: editMeetingProvider, meetingUrl: editMeetingUrl.trim() || undefined, warningMuted: editWarningMuted }); }} style={[styles.saveMeeting, { backgroundColor: colors.primary }]}><Text style={styles.saveMeetingText}>Save meeting link</Text></Pressable><Pressable onPress={() => { update(selected.id, { meetingProvider: undefined, meetingUrl: undefined }); setEditMeetingUrl(""); }} style={[styles.removeMeeting, { borderColor: colors.border }]}><Text style={[styles.removeMeetingText, { color: colors.foreground }]}>Remove</Text></Pressable></View><View style={styles.warningOverride}><Text style={[styles.warningOverrideLabel, { color: colors.muted }]}>Five-minute warning for this meeting</Text><Switch value={!editWarningMuted} onValueChange={(value: boolean) => setEditWarningMuted(!value)} trackColor={{ false: colors.border, true: colors.primary }} thumbColor="#FFFFFF" /></View><View style={styles.meetingActions}><Pressable onPress={() => openMeeting("zoom", selected.meetingUrl)} style={[styles.meetingButton, { borderColor: colors.border }]}><Ionicons name="videocam" size={16} color="#2D8CFF" /><Text style={[styles.meetingText, { color: colors.foreground }]}>Open Zoom</Text></Pressable><Pressable onPress={() => openMeeting("meet", selected.meetingUrl)} style={[styles.meetingButton, { borderColor: colors.border }]}><Ionicons name="videocam" size={16} color="#012C3D" /><Text style={[styles.meetingText, { color: colors.foreground }]}>Open Meet</Text></Pressable></View><View style={styles.meetingSchedule}><Pressable onPress={() => scheduleMeeting("zoom")}><Text style={styles.scheduleText}>Schedule Zoom at {selected.timeStart}</Text></Pressable><Pressable onPress={() => scheduleMeeting("meet")}><Text style={styles.scheduleText}>Schedule Meet at {selected.timeStart}</Text></Pressable></View><Pressable onPress={() => { if (selected.critical) { const ids = criticalNotificationIds.current[selected.id]; if (ids) { cancelCriticalCascade(ids); delete criticalNotificationIds.current[selected.id]; } setCheckpoints((all) => { const copy = { ...all }; delete copy[selected.id]; return copy; }); update(selected.id, { critical: false, criticalDeadline: undefined }); setSelected(null); } else { setPendingCriticalTitle(null); setCriticalDeadlineInput(""); setCriticalAmbiguous(false); setCriticalError(""); setShowCriticalPrompt(true); } }} style={styles.flagAction}><Ionicons name={selected.critical ? "flag" : "flag-outline"} size={17} color="#F8444F" /><Text style={styles.flagText}>{selected.critical ? "Remove critical flag" : "Don't let me forget this"}</Text></Pressable>
             <Pressable onPress={() => { if (deleteConfirmId === selected.id) { removeCommitment(selected); setDeleteConfirmId(null); } else { setDeleteConfirmId(selected.id); } }} style={[styles.flagAction, { marginTop: 4 }]}><Ionicons name="trash-outline" size={16} color={colors.muted} /><Text style={[styles.flagText, { color: colors.muted }]}>{deleteConfirmId === selected.id ? "Tap again to delete (undoable for a few seconds)" : "Delete this commitment"}</Text></Pressable>
@@ -939,6 +982,21 @@ export default function HomeScreen() {
 
 
 
+      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.background, maxHeight: "92%" }, isWideWindow ? styles.wideSheet : null]}>
+            <View style={styles.sheetHandle} />
+            <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>CHANGE REMINDER</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <WhenPicker value={editing?.when ?? null} onChange={(next) => { if (next) setEditing((current) => (current ? { ...current, when: next } : current)); }} />
+              <View style={styles.sheetActions}>
+                <Pressable onPress={() => { if (editing) { update(editing.id, { scheduledDate: localDateKey(editing.when), timeStart: formatHHMM(editing.when), timeEnd: formatHHMM(new Date(editing.when.getTime() + 30 * 60 * 1000)), status: "active", riskState: "stable" }); } setEditing(null); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.primaryActionText}>Save</Text></Pressable>
+                <Pressable onPress={() => setEditing(null)} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Cancel</Text></Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={showRescue} transparent animationType="slide" onRequestClose={() => setShowRescue(false)}><View style={styles.modalBackdrop}><View style={[styles.sheet, { backgroundColor: colors.background }, isWideWindow ? styles.wideSheet : null]}><View style={styles.sheetHandle} /><Text style={[styles.sheetEyebrow, { color: "#F8444F" }]}>SIX-COMMITMENT CEILING</Text><Text style={[styles.sheetTitle, { color: colors.foreground }]}>Your day is full by design.</Text><Text style={[styles.sheetBody, { color: colors.muted }]}>Eagle found the lowest-impact commitment to move instead of making you choose what to drop.</Text><View style={[styles.swapCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.swapLabel, { color: colors.muted }]}>SUGGESTED TO MOVE</Text><Text style={[styles.swapTitle, { color: colors.foreground }]}>{active[active.length - 1]?.title ?? "No commitment"}</Text><Text style={[styles.swapReason, { color: colors.muted }]}>Stable history | lowest rescue impact</Text></View><Pressable onPress={() => { if (active.length) update(active[active.length - 1].id, { status: "rescheduled", riskState: "rescued" }); setShowRescue(false); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={styles.primaryActionText}>Confirm swap</Text></Pressable><Pressable onPress={() => setShowRescue(false)} style={styles.laterAction}><Text style={[styles.laterText, { color: colors.muted }]}>Keep tomorrow full</Text></Pressable></View></View></Modal>
       <Modal visible={showOnboarding} transparent animationType="fade" onRequestClose={finishOnboarding}>
         <View style={styles.modalBackdrop}>
@@ -984,7 +1042,7 @@ const styles = StyleSheet.create({
   count: { ...typography.bodySmall, fontWeight: "800" },
   timeline: { gap: spacing.sm },
   commitmentRow: { flexDirection: "row", minHeight: 0 },
-  timeCol: { width: 48, paddingTop: spacing.sm },
+  timeCol: { width: 68, paddingTop: spacing.sm },
   time: { ...typography.caption, fontWeight: "800" },
   timeEnd: { ...typography.caption, marginTop: 2 },
   timelineLine: { width: 1, marginHorizontal: spacing.sm, position: "relative" },
