@@ -1,4 +1,4 @@
-// Today: say what to remember, pick when, get reminded.
+// Today: say what to remember, pick when, get reminded. Everything stays on this device.
 
 import AsyncStorage from "@/lib/secure-storage";
 import { readJsonSafely, writeJsonSafely } from "@/lib/safe-json";
@@ -10,14 +10,11 @@ import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import WhenPicker, { formatHHMM } from "@/components/when-picker";
 import { useColors } from "@/hooks/use-colors";
-import { useAuth } from "@/hooks/use-auth";
 import { useVoiceCapture } from "@/hooks/use-voice-capture";
 import { parseCommitment } from "@/lib/commitment-parser";
-import { mergeCommitments } from "@/lib/commitment-sync";
 import { createClientId } from "@/lib/identity";
 import { cancelReminder, requestLocalNotificationPermission, scheduleReminder } from "@/lib/native-services";
 import { nextScheduledDate, needsRegeneration, type Recurrence } from "@/lib/recurrence";
-import { trpc } from "@/lib/trpc";
 import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
 import { typography } from "@/constants/typography";
@@ -36,13 +33,6 @@ type Commitment = {
   priority: Priority;
   status: CommitmentStatus;
   riskState: RiskState;
-  // Older saved items and cloud rows may still carry these; the screen no longer uses them.
-  critical?: boolean;
-  criticalDeadline?: string;
-  meetingProvider?: "zoom" | "meet";
-  meetingUrl?: string;
-  warningMuted?: boolean;
-  syncFailed?: boolean;
   deletedAt?: string;
   recurrence?: Recurrence;
 };
@@ -126,11 +116,6 @@ export default function HomeScreen() {
   const colors = useColors();
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
-  const { isAuthenticated } = useAuth();
-  const cloudList = trpc.commitments.list.useQuery(undefined, { enabled: isAuthenticated });
-  const createCloud = trpc.commitments.create.useMutation();
-  const updateCloud = trpc.commitments.update.useMutation();
-  const deleteCloud = trpc.commitments.delete.useMutation();
 
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -141,58 +126,15 @@ export default function HomeScreen() {
   const [now, setNow] = useState(() => Date.now());
   const [isListening, setIsListening] = useState(false);
   const [toast, setToast] = useState("");
-  const [syncNotice, setSyncNotice] = useState("");
   const [undoNotice, setUndoNotice] = useState<{ id: string; title: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  const commitmentsRef = useRef(commitments);
-  commitmentsRef.current = commitments;
-  const suppressedIdsRef = useRef<Set<string>>(new Set());
   const pendingDeleteRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   const flash = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(""), 3600);
-  };
-
-  const markSyncFailed = (id: string, message: string) => {
-    setCommitments((items) => items.map((item) => (item.id === id ? { ...item, syncFailed: true } : item)));
-    setSyncNotice(message);
-    setTimeout(() => setSyncNotice(""), 4200);
-  };
-  const clearSyncFailed = (id: string) => setCommitments((items) => items.map((item) => (item.id === id ? { ...item, syncFailed: false } : item)));
-
-  // A locally created commitment has a client id until the server assigns a real one.
-  const remapCommitmentId = (oldId: string, newId: string) => {
-    setCommitments((items) => items.map((item) => (item.id === oldId ? { ...item, id: newId, syncFailed: false } : item)));
-    const moved = reminderIds[oldId];
-    if (moved) {
-      delete reminderIds[oldId];
-      reminderIds[newId] = moved;
-      saveReminderIds();
-    }
-  };
-
-  const cloudCreate = (item: Commitment, notify = true) => {
-    if (!isAuthenticated) return;
-    createCloud.mutate(
-      {
-        title: item.title,
-        category: item.category,
-        scheduledDate: item.scheduledDate,
-        timeStart: item.timeStart,
-        timeEnd: item.timeEnd,
-        priority: item.priority,
-        status: item.status,
-        riskState: item.riskState,
-        critical: false,
-      },
-      {
-        onSuccess: (serverId) => remapCommitmentId(item.id, String(serverId)),
-        onError: () => { if (notify) markSyncFailed(item.id, "Couldn't save this to the cloud yet - it will retry."); },
-      },
-    );
   };
 
   // ---------- load saved data, then re-arm every open reminder ----------
@@ -231,31 +173,6 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Merge the cloud list in once the local data has loaded.
-  useEffect(() => {
-    if (!hydrated || !isAuthenticated || cloudList.data === undefined) return;
-    const merged = mergeCommitments(
-      commitmentsRef.current.map((item) => ({ ...item, critical: Boolean(item.critical) })) as any,
-      cloudList.data.map((item) => ({ ...item, critical: Boolean(item.critical) })) as any,
-      suppressedIdsRef.current,
-    ) as unknown as Commitment[];
-    setCommitments(merged);
-    merged.forEach((item) => { if (isOpen(item) && !reminderIds[item.id]) applyReminder(item).catch(() => undefined); });
-  }, [hydrated, isAuthenticated, cloudList.data]);
-
-  // Retry anything that failed to sync, on the same 30 second tick.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    commitmentsRef.current.filter((item) => item.syncFailed).forEach((item) => {
-      if (/^\d+$/.test(item.id) && item.id.length < 13) {
-        updateCloud.mutate({ id: Number(item.id), status: item.status, riskState: item.riskState }, { onSuccess: () => clearSyncFailed(item.id) });
-      } else {
-        cloudCreate(item, false);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, isAuthenticated]);
-
   // Repeating reminders: when one is done, create the next occurrence.
   useEffect(() => {
     if (!hydrated) return;
@@ -269,16 +186,14 @@ export default function HomeScreen() {
       scheduledDate: nextScheduledDate(source.scheduledDate, source.recurrence!),
       status: "active" as const,
       riskState: "stable" as const,
-      syncFailed: undefined,
       deletedAt: undefined,
     }));
     setCommitments((items) => [
       ...items.map((item) => (sourceIds.has(item.id) ? { ...item, recurrence: "none" as const } : item)),
       ...fresh,
     ]);
-    fresh.forEach((item) => { cloudCreate(item); applyReminder(item).catch(() => undefined); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commitments, hydrated, isAuthenticated]);
+    fresh.forEach((item) => { applyReminder(item).catch(() => undefined); });
+  }, [commitments, hydrated]);
 
   // ---------- voice capture ----------
   const { start: startVoice, stop: stopVoice, isSupported: voiceSupported } = useVoiceCapture({
@@ -302,12 +217,6 @@ export default function HomeScreen() {
     const current = commitments.find((item) => item.id === id);
     setCommitments((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     if (current) applyReminder({ ...current, ...patch }).catch(() => undefined);
-    if (isAuthenticated && /^\d+$/.test(id) && id.length < 13 && (patch.status || patch.riskState)) {
-      updateCloud.mutate(
-        { id: Number(id), status: patch.status, riskState: patch.riskState },
-        { onSuccess: () => clearSyncFailed(id), onError: () => markSyncFailed(id, "Couldn't sync that change - it will retry.") },
-      );
-    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -344,11 +253,7 @@ export default function HomeScreen() {
   };
 
   const finalizeDelete = (id: string) => {
-    suppressedIdsRef.current.add(id);
     setCommitments((items) => items.filter((item) => item.id !== id));
-    if (isAuthenticated && /^\d+$/.test(id) && id.length < 13) {
-      deleteCloud.mutate({ id: Number(id) }, { onError: () => setSyncNotice("Removed here, but the cloud copy may still exist.") });
-    }
   };
 
   const settlePendingDelete = () => {
@@ -361,8 +266,9 @@ export default function HomeScreen() {
 
   const removeCommitment = (item: Commitment) => {
     settlePendingDelete();
-    setCommitments((items) => items.map((entry) => (entry.id === item.id ? { ...entry, deletedAt: new Date().toISOString() } : entry)));
-    applyReminder({ ...item, deletedAt: new Date().toISOString() }).catch(() => undefined);
+    const deletedAt = new Date().toISOString();
+    setCommitments((items) => items.map((entry) => (entry.id === item.id ? { ...entry, deletedAt } : entry)));
+    applyReminder({ ...item, deletedAt }).catch(() => undefined);
     const timer = setTimeout(() => {
       finalizeDelete(item.id);
       pendingDeleteRef.current = null;
@@ -397,7 +303,6 @@ export default function HomeScreen() {
       : parsed;
     const next: Commitment = { ...withTime };
     setCommitments((items) => [...items, next]);
-    cloudCreate(next);
     requestLocalNotificationPermission().catch(() => undefined);
     applyReminder(next).catch(() => undefined);
     setCapture("");
@@ -517,7 +422,6 @@ export default function HomeScreen() {
                         <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={3}>{item.title}</Text>
                         <Text style={[styles.cardWhen, { color: colors.muted }]}>{timeText(item)}</Text>
                       </View>
-                      {item.syncFailed ? <Ionicons name="cloud-offline-outline" size={15} color="#F8444F" accessibilityLabel="Not synced yet" /> : null}
                       <Pressable onPress={() => removeCommitment(item)} accessibilityLabel={`Delete ${item.title}`} hitSlop={10}>
                         <Ionicons name="trash-outline" size={18} color={colors.muted} />
                       </Pressable>
@@ -532,7 +436,7 @@ export default function HomeScreen() {
               </View>
             ))}
 
-            {upcoming.length === 0 && !(isAuthenticated && cloudList.isLoading) ? (
+            {upcoming.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="alarm-outline" size={30} color={colors.muted} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No reminders yet</Text>
@@ -545,7 +449,6 @@ export default function HomeScreen() {
 
       <View pointerEvents="box-none" style={styles.toastStack}>
         {toast ? <View style={[styles.toast, { backgroundColor: colors.foreground }]}><Text style={styles.toastText}>{toast}</Text></View> : null}
-        {syncNotice ? <View style={[styles.toast, { backgroundColor: "#F8444F" }]}><Ionicons name="cloud-offline-outline" size={16} color="#FFFFFF" /><Text style={styles.toastText}>{syncNotice}</Text></View> : null}
         {undoNotice ? (
           <View style={[styles.toast, { backgroundColor: colors.foreground }]}>
             <Text style={styles.toastText}>Deleted "{undoNotice.title}"</Text>

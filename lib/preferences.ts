@@ -1,4 +1,4 @@
-﻿// MERGED â€” see MERGE-NOTES.md. Based on c_next_sequence's implementation:
+// MERGED â€” see MERGE-NOTES.md. Based on c_next_sequence's implementation:
 // unlike a_section7's version (a pure type + merge-rule module with no
 // storage), this one actually reads/writes AsyncStorage and mirrors onto
 // the legacy single-purpose keys that index.tsx and dashboard.tsx already
@@ -35,8 +35,6 @@ export async function getLocalPreferences(): Promise<EaglePreferences> {
 const LEGACY_KEYS: Partial<Record<keyof EaglePreferences, string>> = {
   meetingChimeMuted: "deagle-meeting-chime-muted",
   earlyWarningMuted: "deagle-early-warning-muted",
-  briefingHour: "deagle-briefing-hour",
-  reviewHour: "deagle-review-hour",
 };
 
 export async function setLocalPreferences(patch: Partial<EaglePreferences>): Promise<EaglePreferences> {
