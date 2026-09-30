@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // Test-only substitute for expo-crypto. Production code still uses the
 // real expo-crypto — this alias only applies under Vitest, and only
 // exists because importing expo-modules-core (a transitive dependency
