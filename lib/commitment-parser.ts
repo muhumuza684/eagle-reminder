@@ -1,27 +1,25 @@
-﻿import { createClientId } from "@/lib/identity";
+import { createClientId } from "@/lib/identity";
 import type { Recurrence } from "@/lib/recurrence";
-
-// Tier 1: identity is generated independently of wall-clock time.
 
 export type ParsedCommitment = {
   id: string;
   title: string;
   category: string;
+  scheduledDate: string;
   timeStart: string;
   timeEnd: string;
   priority: "high" | "medium";
   status: "active";
   riskState: "stable" | "at_risk";
-  meetingProvider?: "zoom" | "meet";
-  meetingUrl?: string;
-  // Tier 3 #11 â€” this was missing entirely. Without it, "Today" (index.tsx's
-  // `active` list) and the 6-commitment daily cap had no date scoping at
-  // all: every unresolved commitment from the account's entire history
-  // counted as "today's" list, forever, since nothing ever filtered by
-  // date. Defaults to the device's local today.
-  scheduledDate: string;
   recurrence: Recurrence;
 };
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+// The device's local date, never the UTC date (they differ for hours every day).
+function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 export function inferCategory(text: string) {
   const lower = text.toLowerCase();
@@ -31,50 +29,89 @@ export function inferCategory(text: string) {
   return "Work";
 }
 
-export function extractMeetingLink(text: string): { provider: "zoom" | "meet"; url: string } | null { const match = text.match(/https?:\/\/[^\s]+/i); if (!match) return null; const url = match[0].replace(/[.,!?]+$/, ""); const lower = url.toLowerCase(); if (lower.includes("zoom.us") || lower.includes("zoom.com")) return { provider: "zoom", url }; if (lower.includes("meet.google.com")) return { provider: "meet", url }; return null; }
+// A bare number is never a time. A time is "7pm", "7:30 pm", "19:45", or "at 7";
+// an optional leading "at" or "by" belongs to the time phrase.
+const TIME_WITH_MERIDIEM = /\b(?:(?:at|by)\s+)?(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i;
+const TIME_24H = /\b(?:(?:at|by)\s+)?([01]?\d|2[0-3]):([0-5]\d)\b/i;
+const TIME_AFTER_AT = /\bat\s+([01]?\d|2[0-3])\b(?![:\d])/i;
 
-export function normalizeMeetingUrl(value: string): string { let cleaned = value.trim().replace(/[<>]/g, "").replace(/[.,!?]+$/, ""); if (cleaned.startsWith("www.")) cleaned = `https://${cleaned}`; return cleaned; }
+type TimeMatch = { hour: number; minute: number; index: number; length: number };
 
-export function validateMeetingUrl(value: string, provider?: "zoom" | "meet"): string | null { if (!value.trim()) return null; const normalized = normalizeMeetingUrl(value); let parsed: URL; try { parsed = new URL(normalized); } catch { return "Enter a complete URL starting with https://."; } if (parsed.protocol !== "https:") return "Meeting links must use https://."; const host = parsed.hostname.toLowerCase(); const supported = provider === "zoom" ? host.endsWith("zoom.us") || host.endsWith("zoom.com") : provider === "meet" ? host === "meet.google.com" : host.endsWith("zoom.us") || host.endsWith("zoom.com") || host === "meet.google.com"; return supported ? null : "Use a supported Zoom or Google Meet link."; }
+function findTime(text: string): TimeMatch | null {
+  let match = TIME_WITH_MERIDIEM.exec(text);
+  if (match) {
+    const meridiem = (match[3] ?? "").toLowerCase();
+    let hour = Number(match[1]);
+    if (meridiem === "pm" && hour < 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+    return { hour, minute: match[2] ? Number(match[2]) : 0, index: match.index, length: match[0].length };
+  }
+  match = TIME_24H.exec(text);
+  if (match) return { hour: Number(match[1]), minute: Number(match[2]), index: match.index, length: match[0].length };
+  match = TIME_AFTER_AT.exec(text);
+  if (match) return { hour: Number(match[1]), minute: 0, index: match.index, length: match[0].length };
+  return null;
+}
 
 /**
- * Tier 15 update: "tomorrow" in the capture text now shifts scheduledDate
- * forward one day (previously stripped as noise but not acted on). Specific
- * weekday names ("next Tuesday") are still not parsed -- today/tomorrow
- * only for now, a further Tier 15 follow-up if needed.
+ * Turns a sentence into a reminder. `now` can be passed in so results are repeatable.
+ *
+ * - "tomorrow" moves the date forward one day; "today" is accepted and removed.
+ * - No time at all: tomorrow means 09:00, otherwise the next whole hour, so a
+ *   reminder is never created in the past.
+ * - A time that has already passed today, with no "today"/"tomorrow", means tomorrow.
+ * - Weekday names ("Friday", "every Monday") do not move the date yet.
  */
-/** superseded-comment-marker
- * old note kept for history: this strips the words "today"/"tomorrow" from the title
- * as noise but doesn't act on them â€” "call mom tomorrow at 5pm" still
- * schedules for today. That's a separate, smaller gap (natural-language
- * date parsing) than the one this file's `scheduledDate` addition fixes,
- * and is left for a follow-up rather than expanding this fix further â€” see
- * FIXES-LOG.md.
- */
-export function parseCommitment(text: string): ParsedCommitment {
-  const time = text.match(/\b([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm)?\b/i);
-  let hour = time ? Number(time[1]) : 9;
-  const minute = time?.[2] ? Number(time[2]) : 0;
-  const meridiem = time?.[3]?.toLowerCase();
-  if (meridiem === "pm" && hour < 12) hour += 12;
-  if (meridiem === "am" && hour === 12) hour = 0;
-  const timeStart = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  const timeEnd = `${String(Math.min(hour + 1, 23)).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  const meeting = extractMeetingLink(text);
+export function parseCommitment(text: string, now: Date = new Date()): ParsedCommitment {
+  const time = findTime(text);
+  const hasToday = /\btoday\b/i.test(text);
   const hasTomorrow = /\btomorrow\b/i.test(text);
-  const scheduledDateObj = new Date();
-  if (hasTomorrow) scheduledDateObj.setDate(scheduledDateObj.getDate() + 1);
+
+  const target = new Date(now.getTime());
+  if (hasTomorrow) target.setDate(target.getDate() + 1);
+
+  if (time) {
+    target.setHours(time.hour, time.minute, 0, 0);
+    if (!hasToday && !hasTomorrow && target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+  } else if (hasTomorrow) {
+    target.setHours(9, 0, 0, 0);
+  } else {
+    target.setMinutes(0, 0, 0);
+    target.setHours(target.getHours() + 1);
+  }
+
+  const hour = target.getHours();
+  const minute = target.getMinutes();
+  const endMinutes = Math.min(hour * 60 + minute + 30, 23 * 60 + 59);
+  const timeStart = `${pad(hour)}:${pad(minute)}`;
+  const timeEnd = `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`;
+
   const recurrence: Recurrence = /\bevery day\b|\bdaily\b/i.test(text)
     ? "daily"
     : /\bevery week\b|\bweekly\b|\bevery (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(text)
       ? "weekly"
       : "none";
-  const cleaned = text.replace(/https?:\/\/[^\s]+/i, "").replace(/\bevery (day|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, "").replace(/\b(daily|weekly)\b/gi, "").replace(/\b(today|tomorrow|at|by)\b/gi, "").replace(/\b([01]?\d|2[0-3])(?::[0-5]\d)?\s*(am|pm)?\b/gi, "").replace(/\s+/g, " ").trim();
-  return { id: createClientId(), title: cleaned.charAt(0).toUpperCase() + cleaned.slice(1) || "Untitled commitment", category: inferCategory(text), timeStart, timeEnd, priority: /urgent|critical|important|must/i.test(text) ? "high" : "medium", status: "active", riskState: hour >= 18 ? "at_risk" : "stable", meetingProvider: meeting?.provider, meetingUrl: meeting?.url, scheduledDate: scheduledDateObj.toISOString().slice(0, 10), recurrence };
+
+  // Only the words that carried the date, time and repeat are removed from the title.
+  const withoutTime = time ? text.slice(0, time.index) + " " + text.slice(time.index + time.length) : text;
+  const cleaned = withoutTime
+    .replace(/\bevery (day|week|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, " ")
+    .replace(/\b(daily|weekly)\b/gi, " ")
+    .replace(/\b(?:by\s+)?(?:today|tomorrow)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,.;:-]+|[\s,.;:-]+$/g, "");
+  const title = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+
+  return {
+    id: createClientId(),
+    title: title || "Untitled commitment",
+    category: inferCategory(text),
+    scheduledDate: localDateKey(target),
+    timeStart,
+    timeEnd,
+    priority: /urgent|critical|important|must/i.test(text) ? "high" : "medium",
+    status: "active",
+    riskState: hour >= 18 ? "at_risk" : "stable",
+    recurrence,
+  };
 }
-
-
-
-
-
-
