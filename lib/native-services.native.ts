@@ -1,11 +1,15 @@
 // Native adapter kept isolated from the PWA bundle.
+import { Platform } from 'react-native';
 import { getLocalPreferences } from './preferences';
 
 let notificationsPromise: Promise<typeof import("expo-notifications")> | null = null;
 
+// Reminders go to their own Android channel; iOS has no channels.
+const androidChannel = Platform.OS === 'android' ? { channelId: 'reminders' } : {};
+
 async function getNotifications() {
   if (!notificationsPromise) {
-    notificationsPromise = import("expo-notifications").then((api) => {
+    notificationsPromise = import("expo-notifications").then(async (api) => {
       api.setNotificationHandler({
         handleNotification: async () => ({
           shouldPlaySound: true,
@@ -14,6 +18,18 @@ async function getNotifications() {
           shouldShowList: true,
         }),
       });
+
+      // Android 13+ only shows the permission prompt once at least one channel exists.
+      if (Platform.OS === 'android') {
+        try {
+          await api.setNotificationChannelAsync('reminders', {
+            name: 'Reminders',
+            importance: api.AndroidImportance.HIGH,
+          });
+        } catch {
+          // The channel is optional - reminders still work on the default one.
+        }
+      }
 
       return api;
     });
@@ -68,7 +84,7 @@ export async function scheduleReminder(commitmentId: string, title: string, when
     const Notifications = await getNotifications();
     return await Notifications.scheduleNotificationAsync({
       content: { title: 'Reminder', body: title, data: { route: '/', commitmentId }, sound: 'default' },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, ...androidChannel },
     });
   } catch {
     return '';
