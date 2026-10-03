@@ -1,5 +1,5 @@
-// Web adapter: reminders use in-page timers and the browser Notification API,
-// so they fire while the tab or installed app is open.
+// Web adapter: reminders use in-page timers and browser notifications,
+// so they fire while the tab or the installed app is open.
 
 const webTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -14,6 +14,21 @@ async function browserNotification(title: string, body: string, data?: Record<st
     await NotificationApi.requestPermission();
   }
   if (NotificationApi.permission !== 'granted') return false;
+
+  // Chrome on Android refuses `new Notification(...)`; it only allows notifications that are
+  // shown through the service worker. Use that whenever a service worker is registered.
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.showNotification(title, { body, data, icon: '/icon.png' });
+        return true;
+      }
+    }
+  } catch {
+    // fall through to the page-level API below
+  }
+
   try {
     new NotificationApi(title, { body, data });
     return true;
