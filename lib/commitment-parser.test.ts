@@ -109,6 +109,15 @@ describe("parseCommitment: dates", () => {
   });
 });
 
+describe("parseCommitment: explicit", () => {
+  it("says whether the text named a time", () => {
+    expect(parseCommitment("Call Mum tomorrow", MORNING).explicit).toBe(true);
+    expect(parseCommitment("Call Mum in 2 hours", MORNING).explicit).toBe(true);
+    expect(parseCommitment("Call Mum", MORNING).explicit).toBe(false);
+    expect(parseCommitment("Buy 2 apples", MORNING).explicit).toBe(false);
+  });
+});
+
 describe("parseCommitment: other fields", () => {
   it("detects repeats", () => {
     expect(parseCommitment("Water plants every day", MORNING)).toMatchObject({ title: "Water plants", recurrence: "daily" });

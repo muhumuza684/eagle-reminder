@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "deaglehub",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -16,7 +16,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#012C3D",
+        "backgroundColor": "#090706",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -34,7 +34,7 @@
       "display": "standalone",
       "startUrl": "/",
       "orientation": "portrait",
-      "backgroundColor": "#F7F8F3",
+      "backgroundColor": "#090706",
       "bundler": "metro",
       "output": "static"
     },
@@ -45,12 +45,23 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#F7F8F3"
+          "backgroundColor": "#090706"
         }
       ],
       "expo-speech-recognition",
       "@react-native-community/datetimepicker",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/crystal.wav",
+            "./assets/sounds/marimba.wav",
+            "./assets/sounds/glass.wav",
+            "./assets/sounds/musicbox.wav"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,20 +2,26 @@
   "id": "/",
   "name": "D-Eagle Hub",
   "short_name": "D-Eagle",
-  "description": "D-Eagle web app",
+  "description": "A luxury reminders watch. Say it once and D-Eagle holds it for you.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#012C3D",
-  "background_color": "#F7F8F3",
+  "theme_color": "#090706",
+  "background_color": "#090706",
   "icons": [
     {
       "src": "/icon.png",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

@@ -1,564 +1,398 @@
-// Today: say what to remember, pick when, get reminded. Everything stays on this device.
-
-import AsyncStorage from "@/lib/secure-storage";
-import { readJsonSafely, writeJsonSafely } from "@/lib/safe-json";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-
-import { ScreenContainer } from "@/components/screen-container";
-import WhenPicker, { formatHHMM } from "@/components/when-picker";
-import { useColors } from "@/hooks/use-colors";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, Vibration, View, useWindowDimensions } from "react-native";
+import Svg, { Path } from "react-native-svg";
+import { Card, Eyebrow, MetalBg, Pill } from "@/components/luxe";
+import { Dial } from "@/components/watch/dial";
+import { FONT } from "@/constants/fonts";
+import { useReminders } from "@/hooks/use-reminders";
 import { useVoiceCapture } from "@/hooks/use-voice-capture";
+import { whenOf } from "@/lib/commitment";
 import { parseCommitment } from "@/lib/commitment-parser";
-import { createClientId } from "@/lib/identity";
-import { cancelReminder, requestLocalNotificationPermission, scheduleReminder } from "@/lib/native-services";
-import { nextScheduledDate, needsRegeneration, type Recurrence } from "@/lib/recurrence";
-import { radii } from "@/constants/radii";
-import { spacing } from "@/constants/spacing";
-import { typography } from "@/constants/typography";
+import { DAY_ABBR, MONTH_ABBR, clock12, dayLabel, greeting, relativeTime } from "@/lib/format";
+import { requestLocalNotificationPermission } from "@/lib/native-services";
+import { onPreview } from "@/lib/preview-bus";
+import { HORN, RINGTONES, playSound, stopSound } from "@/lib/sound";
+import { useTheme } from "@/lib/theme";
 
-type CommitmentStatus = "active" | "completed" | "rescheduled" | "missed";
-type RiskState = "stable" | "at_risk" | "rescued" | "missed";
-type Priority = "high" | "medium" | "low";
+type Ringing = { id: string | null; title: string; demo: boolean };
+type Toast = { text: string; undo?: boolean };
 
-type Commitment = {
-  id: string;
-  title: string;
-  category: string;
-  scheduledDate: string;
-  timeStart: string;
-  timeEnd: string;
-  priority: Priority;
-  status: CommitmentStatus;
-  riskState: RiskState;
-  deletedAt?: string;
-  recurrence?: Recurrence;
-};
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
-const STORAGE_KEY = "deagle-commitments-v1";
-const REMINDERS_STORAGE_KEY = "deagle-reminders-v1";
-const ONBOARDING_KEY = "deagle-onboarded-v1";
-const UNDO_WINDOW_MS = 6000;
-const DEMO_IDS = new Set(["1", "2", "3"]);
-const DEMO_TITLES = new Set(["Send revised proposal to Maya", "Pick up prescription", "Call Dad about Sunday"]);
+export default function TodayScreen() {
+  const { finish: c, prefs } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const wide = width >= 840;
+  const reminders = useReminders(prefs.ringtone);
+  const { cur, open } = reminders;
 
-const ONBOARDING_SLIDES = [
-  { icon: "chatbubble-ellipses-outline" as const, title: "Say what to remember", body: "Type it or speak it. For example: Call Mum tomorrow at 7 pm." },
-  { icon: "calendar-outline" as const, title: "Pick the day and time", body: "Use the calendar and the clock, then tap Set reminder." },
-  { icon: "alarm-outline" as const, title: "We remind you", body: "You get a notification at that time. Tick it off, snooze it, or change the time." },
-];
-
-function localDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isOpen(item: Commitment): boolean {
-  return !item.deletedAt && (item.status === "active" || item.status === "rescheduled");
-}
-
-function whenOf(item: Commitment): Date | null {
-  const [y, m, d] = item.scheduledDate.split("-").map(Number);
-  const [h, mi] = item.timeStart.split(":").map(Number);
-  if ([y, m, d, h, mi].some((part) => Number.isNaN(part))) return null;
-  return new Date(y, m - 1, d, h, mi, 0, 0);
-}
-
-// One scheduled reminder per open commitment. The ids survive restarts.
-let reminderIds: Record<string, string> = {};
-
-function saveReminderIds() {
-  writeJsonSafely(REMINDERS_STORAGE_KEY, reminderIds).catch(() => undefined);
-}
-
-async function applyReminder(item: Commitment) {
-  const existing = reminderIds[item.id];
-  if (existing) {
-    delete reminderIds[item.id];
-    await cancelReminder(existing);
-  }
-  if (isOpen(item)) {
-    const when = whenOf(item);
-    if (when) {
-      const scheduledId = await scheduleReminder(item.id, item.title, when);
-      if (scheduledId) reminderIds[item.id] = scheduledId;
-    }
-  }
-  saveReminderIds();
-}
-
-function ActionButton({ icon, label, onPress, primary, colors }: {
-  icon: "checkmark" | "alarm-outline" | "time-outline";
-  label: string;
-  onPress: () => void;
-  primary?: boolean;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.actionButton,
-        primary ? { backgroundColor: colors.primary } : { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={15} color={primary ? "#FFFFFF" : colors.foreground} />
-      <Text style={[styles.actionText, { color: primary ? "#FFFFFF" : colors.foreground }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-export default function HomeScreen() {
-  const colors = useColors();
-  const { width } = useWindowDimensions();
-  const wide = width >= 1000;
-
-  const [commitments, setCommitments] = useState<Commitment[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-  const [capture, setCapture] = useState("");
-  const [pickedDate, setPickedDate] = useState<Date | null>(null);
-  const [showPicker, setShowPicker] = useState(true);
-  const [editing, setEditing] = useState<{ id: string; when: Date } | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const [isListening, setIsListening] = useState(false);
-  const [toast, setToast] = useState("");
-  const [undoNotice, setUndoNotice] = useState<{ id: string; title: string } | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
-
-  const pendingDeleteRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
-
-  const flash = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(""), 3600);
-  };
-
-  // ---------- load saved data, then re-arm every open reminder ----------
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const stored = await readJsonSafely<Record<string, string>>(
-        REMINDERS_STORAGE_KEY,
-        {},
-        (value): value is Record<string, string> => typeof value === "object" && value !== null && !Array.isArray(value),
-      );
-      reminderIds = stored.value;
-      const result = await readJsonSafely<Commitment[]>(STORAGE_KEY, [], (value): value is Commitment[] => Array.isArray(value));
-      if (cancelled) return;
-      const cleaned = result.value.filter((item) => !(DEMO_IDS.has(item.id) && DEMO_TITLES.has(item.title)));
-      setCommitments(cleaned);
-      setHydrated(true);
-      cleaned.forEach((item) => { applyReminder(item).catch(() => undefined); });
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((seen) => { if (!seen) setShowOnboarding(true); });
-  }, []);
-
-  // Debounced so the encrypted save does not run on every small change.
-  useEffect(() => {
-    if (!hydrated) return;
-    const timer = setTimeout(() => { writeJsonSafely(STORAGE_KEY, commitments).catch(() => undefined); }, 300);
-    return () => clearTimeout(timer);
-  }, [commitments, hydrated]);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Repeating reminders: when one is done, create the next occurrence.
-  useEffect(() => {
-    if (!hydrated) return;
-    const todayKey = localDateKey(new Date());
-    const sources = commitments.filter((item) => needsRegeneration(item, todayKey));
-    if (sources.length === 0) return;
-    const sourceIds = new Set(sources.map((item) => item.id));
-    const fresh: Commitment[] = sources.map((source) => ({
-      ...source,
-      id: createClientId(),
-      scheduledDate: nextScheduledDate(source.scheduledDate, source.recurrence!),
-      status: "active" as const,
-      riskState: "stable" as const,
-      deletedAt: undefined,
-    }));
-    setCommitments((items) => [
-      ...items.map((item) => (sourceIds.has(item.id) ? { ...item, recurrence: "none" as const } : item)),
-      ...fresh,
-    ]);
-    fresh.forEach((item) => { applyReminder(item).catch(() => undefined); });
-  }, [commitments, hydrated]);
-
-  // ---------- voice capture ----------
-  const { start: startVoice, stop: stopVoice, isSupported: voiceSupported } = useVoiceCapture({
-    onResult: ({ transcript, isFinal }) => {
-      if (transcript) setCapture(transcript);
-      if (isFinal) setIsListening(false);
-    },
-    onError: () => setIsListening(false),
-    onEnd: () => setIsListening(false),
+  const [now, setNow] = useState(() => new Date());
+  const [sel, setSel] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d;
   });
+  const [month, setMonth] = useState(() => new Date(sel.getFullYear(), sel.getMonth(), 1));
+  const [hour, setHour] = useState(7);
+  const [minute, setMinute] = useState(0);
+  const [pm, setPm] = useState(true);
+  const [touched, setTouched] = useState(false);
+  const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
+  const [sheet, setSheet] = useState<"month" | "list" | null>(null);
+  const [demoUntil, setDemoUntil] = useState<number | null>(null);
+  const [ringing, setRinging] = useState<Ringing | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
-  const toggleVoice = async () => {
-    if (!voiceSupported) { flash("Voice capture is not available here"); return; }
-    if (isListening) { stopVoice(); setIsListening(false); return; }
-    const started = await startVoice();
-    setIsListening(started);
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), toast.undo ? 6000 : 2400);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  // When something is removed, offer to bring it back.
+  useEffect(() => {
+    if (reminders.removed) setToast({ text: `Removed “${reminders.removed.title}”`, undo: true });
+  }, [reminders.removed]);
+
+  const flash = useCallback((message: string) => setToast({ text: message }), []);
+
+  // ---- when will it ring? words win until the day or time controls are touched ----
+  const picked = useMemo(() => {
+    const d = new Date(sel);
+    d.setHours((hour % 12) + (pm ? 12 : 0), minute, 0, 0);
+    return d;
+  }, [sel, hour, minute, pm]);
+  const parsed = useMemo(() => (text.trim() ? parseCommitment(text) : null), [text]);
+  const fromText = !!parsed?.explicit && !touched;
+  const when = (fromText && parsed ? whenOf(parsed) : null) ?? picked;
+
+  const touch = <T,>(setter: (value: T) => void) => (value: T) => {
+    setTouched(true);
+    setter(value);
   };
 
-  // ---------- actions ----------
-  const update = (id: string, patch: Partial<Commitment>) => {
-    const current = commitments.find((item) => item.id === id);
-    setCommitments((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-    if (current) applyReminder({ ...current, ...patch }).catch(() => undefined);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const snooze = (item: Commitment) => {
-    const later = new Date(Date.now() + 10 * 60 * 1000);
-    update(item.id, {
-      status: "active",
-      scheduledDate: localDateKey(later),
-      timeStart: formatHHMM(later),
-      timeEnd: formatHHMM(new Date(later.getTime() + 30 * 60 * 1000)),
-    });
-  };
-
-  const openChange = (item: Commitment) => {
-    let when = whenOf(item) ?? new Date();
-    if (when.getTime() < Date.now()) {
-      when = new Date();
-      when.setHours(when.getHours() + 1, 0, 0, 0);
+  const onSet = async () => {
+    if (when.getTime() <= Date.now()) {
+      flash("That moment has passed — pick a later time");
+      return;
     }
-    setEditing({ id: item.id, when });
-  };
-
-  const saveChange = () => {
-    if (editing) {
-      update(editing.id, {
-        scheduledDate: localDateKey(editing.when),
-        timeStart: formatHHMM(editing.when),
-        timeEnd: formatHHMM(new Date(editing.when.getTime() + 30 * 60 * 1000)),
-        status: "active",
-        riskState: "stable",
-      });
-    }
-    setEditing(null);
-  };
-
-  const finalizeDelete = (id: string) => {
-    setCommitments((items) => items.filter((item) => item.id !== id));
-  };
-
-  const settlePendingDelete = () => {
-    if (pendingDeleteRef.current) {
-      clearTimeout(pendingDeleteRef.current.timer);
-      finalizeDelete(pendingDeleteRef.current.id);
-      pendingDeleteRef.current = null;
-    }
-  };
-
-  const removeCommitment = (item: Commitment) => {
-    settlePendingDelete();
-    const deletedAt = new Date().toISOString();
-    setCommitments((items) => items.map((entry) => (entry.id === item.id ? { ...entry, deletedAt } : entry)));
-    applyReminder({ ...item, deletedAt }).catch(() => undefined);
-    const timer = setTimeout(() => {
-      finalizeDelete(item.id);
-      pendingDeleteRef.current = null;
-      setUndoNotice((current) => (current?.id === item.id ? null : current));
-    }, UNDO_WINDOW_MS);
-    pendingDeleteRef.current = { id: item.id, timer };
-    setUndoNotice({ id: item.id, title: item.title });
-  };
-
-  const undoDelete = () => {
-    if (!pendingDeleteRef.current) return;
-    clearTimeout(pendingDeleteRef.current.timer);
-    const id = pendingDeleteRef.current.id;
-    pendingDeleteRef.current = null;
-    const item = commitments.find((entry) => entry.id === id);
-    setCommitments((items) => items.map((entry) => (entry.id === id ? { ...entry, deletedAt: undefined } : entry)));
-    if (item) applyReminder({ ...item, deletedAt: undefined }).catch(() => undefined);
-    setUndoNotice(null);
-  };
-
-  const addCommitment = () => {
-    const text = capture.trim();
-    if (!text) return;
-    const parsed = parseCommitment(text);
-    const withTime = pickedDate
-      ? {
-          ...parsed,
-          scheduledDate: localDateKey(pickedDate),
-          timeStart: formatHHMM(pickedDate),
-          timeEnd: formatHHMM(new Date(pickedDate.getTime() + 30 * 60 * 1000)),
-        }
-      : parsed;
-    const next: Commitment = { ...withTime };
-    setCommitments((items) => [...items, next]);
     requestLocalNotificationPermission().catch(() => undefined);
-    applyReminder(next).catch(() => undefined);
-    setCapture("");
-    setPickedDate(null);
-    if (!wide) setShowPicker(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    reminders.add(text, fromText ? null : picked);
+    setText("");
+    setTouched(false);
+    flash(`Done — I'll remind you at ${clock12(when)}`);
   };
 
-  const finishOnboarding = () => {
-    AsyncStorage.setItem(ONBOARDING_KEY, "1");
-    setShowOnboarding(false);
-    setOnboardingStep(0);
+  // ---- voice ----
+  const voice = useVoiceCapture({
+    onResult: ({ transcript, isFinal }) => {
+      if (transcript) setText(transcript);
+      if (isFinal) setListening(false);
+    },
+    onError: () => setListening(false),
+    onEnd: () => setListening(false),
+  });
+  const toggleVoice = async () => {
+    if (!voice.isSupported) {
+      flash("Voice capture is not available on this device");
+      return;
+    }
+    if (listening) {
+      voice.stop();
+      setListening(false);
+      return;
+    }
+    setListening(await voice.start());
   };
 
-  // ---------- what to show ----------
-  const upcoming = useMemo(
-    () => commitments
-      .filter(isOpen)
-      .sort((a, b) => `${a.scheduledDate} ${a.timeStart}`.localeCompare(`${b.scheduledDate} ${b.timeStart}`)),
-    [commitments],
+  // ---- the moving part reaches the goal: ring until answered ----
+  const onArrive = useCallback(() => {
+    setRinging({ id: demoUntil != null ? null : (cur?.id ?? null), title: cur?.title ?? "Preview", demo: demoUntil != null });
+  }, [cur, demoUntil]);
+
+  useEffect(() => {
+    if (!ringing) return;
+    const source = prefs.scene === "express" ? HORN : RINGTONES[prefs.ringtone].source;
+    let count = 0;
+    const chime = () => {
+      playSound(source, Math.min(1, 0.4 + 0.2 * count));
+      Vibration.vibrate([0, 250, 120, 250]);
+      count += 1;
+    };
+    chime();
+    const id = setInterval(chime, prefs.scene === "express" ? 4500 : 3600);
+    return () => {
+      clearInterval(id);
+      stopSound();
+      Vibration.cancel();
+    };
+  }, [ringing, prefs.scene, prefs.ringtone]);
+
+  const answer = (snooze: boolean) => {
+    const r = ringing;
+    if (!r) return;
+    setRinging(null);
+    if (r.demo) {
+      setDemoUntil(null);
+      return;
+    }
+    if (!r.id) return;
+    if (snooze) {
+      reminders.snooze(r.id);
+      flash("Snoozed for 10 minutes");
+    } else {
+      reminders.done(r.id);
+    }
+  };
+
+  const startPreview = useCallback(() => {
+    if (ringing) return;
+    setDemoUntil(Date.now() + 20000);
+  }, [ringing]);
+  useEffect(() => onPreview(startPreview), [startPreview]);
+
+  // ---- calendar helpers ----
+  const weekStart = new Date(sel);
+  weekStart.setDate(sel.getDate() - sel.getDay());
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+  const monthDays = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const monthCells: (Date | null)[] = [
+    ...Array.from({ length: month.getDay() }, () => null),
+    ...Array.from({ length: monthDays }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1)),
+  ];
+  const pickDay = (d: Date) => {
+    setTouched(true);
+    setSel(d);
+    setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    setSheet(null);
+  };
+
+  // ---- layout ----
+  const dialSize = Math.max(200, wide ? Math.min(width * 0.48 - 20, height - 200, 540) : Math.min(width - 28, height * 0.42, 480));
+  const curWhen = cur ? whenOf(cur) : null;
+  const flip = { day: DAY_ABBR[sel.getDay()], date: String(sel.getDate()), month: MONTH_ABBR[sel.getMonth()] };
+  const body = { color: c.ink, fontFamily: FONT.body, fontSize: 13 };
+
+  const dial = (
+    <Dial
+      size={dialSize}
+      scene={prefs.scene}
+      goals={open.flatMap((item) => {
+        const at = whenOf(item);
+        return at ? [{ at, selected: item.id === cur?.id }] : [];
+      })}
+      current={curWhen}
+      demoUntil={demoUntil}
+      ringing={!!ringing}
+      flip={flip}
+      onArrive={onArrive}
+    />
   );
 
-  const groups = useMemo(() => {
-    const todayKey = localDateKey(new Date(now));
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowKey = localDateKey(tomorrow);
-    const result: { label: string; items: Commitment[] }[] = [];
-    for (const item of upcoming) {
-      const when = whenOf(item);
-      let label: string;
-      if (when && when.getTime() < now) label = "Overdue";
-      else if (item.scheduledDate === todayKey) label = "Today";
-      else if (item.scheduledDate === tomorrowKey) label = "Tomorrow";
-      else label = when ? when.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) : item.scheduledDate;
-      const last = result[result.length - 1];
-      if (last && last.label === label) last.items.push(item);
-      else result.push({ label, items: [item] });
-    }
-    return result;
-  }, [upcoming, now]);
+  const step = (label: string, onPress: () => void, hint: string) => <Pill label={label} onPress={onPress} accessibilityLabel={hint} style={{ minWidth: 34 }} />;
 
-  const dateLabel = new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-  const pickerOpen = wide || showPicker;
-  const pickedSummary = pickedDate
-    ? `${pickedDate.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} at ${pickedDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
-    : "Choose day and time";
-  const timeText = (item: Commitment) => {
-    const when = whenOf(item);
-    const clock = when ? when.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : item.timeStart;
-    const repeat = item.recurrence && item.recurrence !== "none" ? ` - repeats ${item.recurrence}` : "";
-    return `${clock}${repeat}`;
-  };
+  const controls = (
+    <View style={{ gap: 8, width: "100%" }}>
+      <View style={{ flexDirection: "row", gap: 8, justifyContent: "center" }}>
+        <Pill label="▶ Preview" onPress={startPreview} />
+        <Pill label={`Reminders · ${open.length}`} onPress={() => setSheet(sheet === "list" ? null : "list")} />
+      </View>
+
+      <Text style={{ color: c.mut, fontFamily: FONT.regular, fontSize: 13, textAlign: "center", minHeight: 36 }}>
+        {cur && curWhen ? (
+          <>
+            {greeting(now)}. <Text style={{ color: c.m1, fontFamily: FONT.displayBold, fontSize: 16 }}>{cur.title}</Text> is {relativeTime(curWhen, now)} — I&apos;ll tap your shoulder.
+          </>
+        ) : (
+          `${greeting(now)}. Nothing to remember yet — tell me what matters.`
+        )}
+      </Text>
+
+      <Card>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <Eyebrow>This week</Eyebrow>
+          <Pill label="Month ▾" onPress={() => setSheet(sheet === "month" ? null : "month")} />
+        </View>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          {week.map((d) => {
+            const on = sameDay(d, sel);
+            return (
+              <Pressable
+                key={d.getTime()}
+                onPress={() => pickDay(d)}
+                accessibilityRole="button"
+                accessibilityLabel={dayLabel(d)}
+                style={{ flex: 1, alignItems: "center", paddingVertical: 4, borderRadius: 14, overflow: "hidden", borderWidth: sameDay(d, now) && !on ? 1 : 0, borderColor: c.m2 }}
+              >
+                {on ? <MetalBg radius={14} /> : null}
+                <Text style={{ color: on ? "#120d06" : c.mut, fontFamily: FONT.strong, fontSize: 8 }}>{"SMTWTFS"[d.getDay()]}</Text>
+                <Text style={{ color: on ? "#120d06" : c.ink, fontFamily: FONT.display, fontSize: 15 }}>{d.getDate()}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
+
+      <Card style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        {step("−", () => touch(setHour)(((hour + 10) % 12) + 1), "Earlier hour")}
+        <Text style={{ color: c.ink, fontFamily: FONT.displayBold, fontSize: 26, minWidth: 34, textAlign: "center" }}>{hour}</Text>
+        {step("+", () => touch(setHour)((hour % 12) + 1), "Later hour")}
+        <Text style={{ color: c.m1, fontFamily: FONT.displayBold, fontSize: 24 }}>:</Text>
+        {step("−5", () => touch(setMinute)((minute + 55) % 60), "Five minutes earlier")}
+        <Text style={{ color: c.ink, fontFamily: FONT.displayBold, fontSize: 26, minWidth: 34, textAlign: "center" }}>{String(minute).padStart(2, "0")}</Text>
+        {step("+5", () => touch(setMinute)((minute + 5) % 60), "Five minutes later")}
+        <Pill label="AM" active={!pm} onPress={() => touch(setPm)(false)} />
+        <Pill label="PM" active={pm} onPress={() => touch(setPm)(true)} />
+      </Card>
+
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="Say it or type it…"
+          placeholderTextColor={c.mut}
+          accessibilityLabel="What should I remind you about?"
+          onSubmitEditing={onSet}
+          style={{ flex: 1, minWidth: 0, borderWidth: 1, borderColor: c.bd, backgroundColor: c.cd, borderRadius: 99, paddingVertical: 11, paddingHorizontal: 16, color: c.ink, fontFamily: FONT.regular, fontSize: 14 }}
+        />
+        <Pressable
+          onPress={toggleVoice}
+          accessibilityRole="button"
+          accessibilityLabel={listening ? "Stop listening" : "Speak a reminder"}
+          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: listening ? 2 : 1, borderColor: listening ? c.gem : c.bd, alignItems: "center", justifyContent: "center" }}
+        >
+          <Svg width={18} height={18} viewBox="0 0 24 24">
+            <Path fill={listening ? c.gem : c.ink} d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11z" />
+          </Svg>
+        </Pressable>
+        <Pill label="Set" primary big onPress={onSet} />
+      </View>
+      <Text style={{ color: c.mut, fontFamily: FONT.regular, fontSize: 12, textAlign: "center" }}>
+        {fromText ? "From your words: " : "I'll remind you "}
+        <Text style={{ color: c.m1, fontFamily: FONT.body }}>
+          {dayLabel(when)} · {clock12(when)}
+        </Text>
+      </Text>
+    </View>
+  );
+
+  const sheetBox = { width: "100%" as const, maxWidth: 380, borderWidth: 1, borderColor: c.m2, borderRadius: 18, padding: 12, backgroundColor: c.b1 };
 
   return (
-    <ScreenContainer className="px-5" containerClassName="bg-background">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Reminders</Text>
-          <Text style={[styles.date, { color: colors.muted }]}>
-            {dateLabel}{upcoming.length > 0 ? ` - ${upcoming.length} coming up` : ""}
-          </Text>
-        </View>
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: 14,
+          gap: 12,
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: wide ? "row" : "column",
+          width: "100%",
+          maxWidth: 980,
+          alignSelf: "center",
+        }}
+      >
+        <View style={{ alignItems: "center" }}>{dial}</View>
+        <View style={{ flex: wide ? 1 : undefined, maxWidth: 520, width: wide ? undefined : "100%" }}>{controls}</View>
+      </ScrollView>
 
-        <View style={wide ? styles.columns : undefined}>
-          <View style={wide ? styles.leftColumn : undefined}>
-            <View style={[styles.inputBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <TextInput
-                value={capture}
-                onChangeText={setCapture}
-                onSubmitEditing={addCommitment}
-                returnKeyType="done"
-                placeholder="What should we remind you about?"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, { color: colors.foreground }]}
-              />
-              <Pressable
-                onPress={toggleVoice}
-                accessibilityLabel={isListening ? "Stop listening" : "Start voice capture"}
-                style={({ pressed }) => [styles.micButton, { backgroundColor: isListening ? "#F8444F" : colors.border }, pressed && styles.pressed]}
-              >
-                <Ionicons name={isListening ? "stop" : "mic"} size={17} color={isListening ? "#FFFFFF" : colors.foreground} />
-              </Pressable>
-            </View>
-            <Text style={[styles.hint, { color: colors.muted }]}>Try "Call Mum tomorrow at 7 pm"</Text>
-
-            {!wide ? (
-              <Pressable onPress={() => setShowPicker((open) => !open)} style={({ pressed }) => [styles.whenToggle, { borderColor: colors.border }, pressed && styles.pressed]}>
-                <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-                <Text style={[styles.whenToggleText, { color: pickedDate ? colors.foreground : colors.muted }]}>{pickedSummary}</Text>
-                <Ionicons name={showPicker ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
-              </Pressable>
-            ) : null}
-
-            {pickerOpen ? <WhenPicker value={pickedDate} onChange={setPickedDate} /> : null}
-
-            <Pressable
-              onPress={addCommitment}
-              disabled={!capture.trim()}
-              accessibilityRole="button"
-              accessibilityLabel="Set reminder"
-              style={({ pressed }) => [styles.saveButton, { backgroundColor: capture.trim() ? colors.primary : colors.border }, pressed && styles.pressed]}
-            >
-              <Ionicons name="alarm-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.saveText}>Set reminder</Text>
-            </Pressable>
-          </View>
-
-          <View style={wide ? styles.rightColumn : styles.listBlock}>
-            {groups.map((group) => (
-              <View key={group.label} style={styles.group}>
-                <Text style={[styles.groupLabel, { color: group.label === "Overdue" ? "#F8444F" : colors.muted }]}>{group.label.toUpperCase()}</Text>
-                {group.items.map((item) => (
-                  <View key={item.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: group.label === "Overdue" ? "#F8444F" : colors.border }]}>
-                    <View style={styles.cardMain}>
-                      <View style={styles.cardCopy}>
-                        <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={3}>{item.title}</Text>
-                        <Text style={[styles.cardWhen, { color: colors.muted }]}>{timeText(item)}</Text>
-                      </View>
-                      <Pressable onPress={() => removeCommitment(item)} accessibilityLabel={`Delete ${item.title}`} hitSlop={10}>
-                        <Ionicons name="trash-outline" size={18} color={colors.muted} />
+      {sheet ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom: 8, alignItems: "center", paddingHorizontal: 14 }}>
+          {sheet === "month" ? (
+            <View style={sheetBox}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <Pill label="‹" onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} accessibilityLabel="Previous month" />
+                <Text style={{ color: c.m1, fontFamily: FONT.displayBold, fontSize: 18 }}>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</Text>
+                <Pill label="›" onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} accessibilityLabel="Next month" />
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                {"SMTWTFS".split("").map((d, i) => (
+                  <Text key={`h${i}`} style={{ width: "14.2857%", textAlign: "center", color: c.mut, fontFamily: FONT.strong, fontSize: 9 }}>
+                    {d}
+                  </Text>
+                ))}
+                {monthCells.map((d, i) => (
+                  <View key={i} style={{ width: "14.2857%", aspectRatio: 1, padding: 1 }}>
+                    {d ? (
+                      <Pressable
+                        onPress={() => pickDay(d)}
+                        accessibilityRole="button"
+                        accessibilityLabel={dayLabel(d)}
+                        style={{ flex: 1, borderRadius: 99, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: sameDay(d, now) && !sameDay(d, sel) ? 1 : 0, borderColor: c.m2 }}
+                      >
+                        {sameDay(d, sel) ? <MetalBg /> : null}
+                        <Text style={{ color: sameDay(d, sel) ? "#120d06" : c.ink, fontFamily: FONT.display, fontSize: 15 }}>{d.getDate()}</Text>
                       </Pressable>
-                    </View>
-                    <View style={[styles.actions, { borderTopColor: colors.border }]}>
-                      <ActionButton icon="checkmark" label="Done" primary colors={colors} onPress={() => update(item.id, { status: "completed", riskState: "stable" })} />
-                      <ActionButton icon="alarm-outline" label="Snooze 10m" colors={colors} onPress={() => snooze(item)} />
-                      <ActionButton icon="time-outline" label="Change" colors={colors} onPress={() => openChange(item)} />
-                    </View>
+                    ) : null}
                   </View>
                 ))}
               </View>
-            ))}
-
-            {upcoming.length === 0 ? (
-              <View style={styles.empty}>
-                <Ionicons name="alarm-outline" size={30} color={colors.muted} />
-                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No reminders yet</Text>
-                <Text style={[styles.emptyBody, { color: colors.muted }]}>Type what to remember, pick a day and time, then tap Set reminder.</Text>
+            </View>
+          ) : (
+            <View style={[sheetBox, { maxHeight: Math.max(220, height * 0.55) }]}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <Eyebrow>Your reminders</Eyebrow>
+                <Pill label="Close" onPress={() => setSheet(null)} />
               </View>
+              <ScrollView>
+                {open.length === 0 ? <Text style={{ color: c.mut, fontFamily: FONT.regular, paddingVertical: 8 }}>Nothing yet.</Text> : null}
+                {open.map((item) => {
+                  const at = whenOf(item);
+                  return (
+                    <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 9, borderTopWidth: 1, borderColor: c.bd }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[body, { fontFamily: FONT.strong }, item.id === cur?.id && { color: c.m1 }]}>{item.title}</Text>
+                        {at ? <Text style={{ color: c.mut, fontFamily: FONT.regular, fontSize: 12 }}>{dayLabel(at)} · {clock12(at)} · {relativeTime(at, now)}</Text> : null}
+                      </View>
+                      <Pill label="Follow" onPress={() => { reminders.select(item.id); setSheet(null); }} />
+                      <Pill label="✕" onPress={() => reminders.remove(item.id)} accessibilityLabel={`Delete ${item.title}`} />
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      {ringing ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom: 10, alignItems: "center", paddingHorizontal: 14 }}>
+          <View accessibilityRole="alert" style={{ width: "100%", maxWidth: 420, borderWidth: 1, borderColor: c.m1, borderRadius: 22, padding: 16, alignItems: "center", backgroundColor: c.b1 }}>
+            <Eyebrow>Ringing · until you answer</Eyebrow>
+            <Text style={{ color: c.m1, fontFamily: FONT.displayBold, fontSize: 28, marginVertical: 8, textAlign: "center" }}>{ringing.title}</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pill label="Done" primary big onPress={() => answer(false)} />
+              <Pill label="Snooze 10 min" big onPress={() => answer(true)} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {toast && !ringing ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, top: 8, alignItems: "center", paddingHorizontal: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 99, paddingVertical: 9, paddingHorizontal: 16, overflow: "hidden", maxWidth: "100%" }}>
+            <MetalBg />
+            <Text style={{ color: "#120d06", fontFamily: FONT.strong, fontSize: 13, flexShrink: 1 }}>{toast.text}</Text>
+            {toast.undo ? (
+              <Pressable onPress={() => { reminders.undo(); setToast(null); }} accessibilityRole="button" accessibilityLabel="Undo">
+                <Text style={{ color: "#120d06", fontFamily: FONT.strong, fontSize: 13, textDecorationLine: "underline" }}>Undo</Text>
+              </Pressable>
             ) : null}
           </View>
         </View>
-      </ScrollView>
-
-      <View pointerEvents="box-none" style={styles.toastStack}>
-        {toast ? <View style={[styles.toast, { backgroundColor: colors.foreground }]}><Text style={styles.toastText}>{toast}</Text></View> : null}
-        {undoNotice ? (
-          <View style={[styles.toast, { backgroundColor: colors.foreground }]}>
-            <Text style={styles.toastText}>Deleted "{undoNotice.title}"</Text>
-            <Pressable onPress={undoDelete}><Text style={styles.toastAction}>Undo</Text></Pressable>
-          </View>
-        ) : null}
-      </View>
-
-      <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: colors.background }, wide ? styles.wideSheet : null]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetEyebrow, { color: colors.primary }]}>CHANGE DAY OR TIME</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <WhenPicker value={editing?.when ?? null} onChange={(next) => { if (next) setEditing((current) => (current ? { ...current, when: next } : current)); }} />
-              <View style={styles.sheetActions}>
-                <Pressable onPress={saveChange} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
-                  <Text style={styles.primaryActionText}>Save</Text>
-                </Pressable>
-                <Pressable onPress={() => setEditing(null)} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border }, pressed && styles.pressed]}>
-                  <Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Cancel</Text>
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showOnboarding} transparent animationType="fade" onRequestClose={finishOnboarding}>
-        <View style={[styles.modalBackdrop, { justifyContent: "center" }]}>
-          <View style={[styles.dialog, { backgroundColor: colors.background }]}>
-            <View style={styles.dialogIcon}><Ionicons name={ONBOARDING_SLIDES[onboardingStep].icon} size={30} color={colors.primary} /></View>
-            <Text style={[styles.dialogTitle, { color: colors.foreground }]}>{ONBOARDING_SLIDES[onboardingStep].title}</Text>
-            <Text style={[styles.dialogBody, { color: colors.muted }]}>{ONBOARDING_SLIDES[onboardingStep].body}</Text>
-            <View style={styles.dots}>
-              {ONBOARDING_SLIDES.map((_, index) => (
-                <View key={index} style={{ width: index === onboardingStep ? 16 : 6, height: 6, borderRadius: 3, backgroundColor: index === onboardingStep ? colors.primary : colors.border }} />
-              ))}
-            </View>
-            <View style={styles.sheetActions}>
-              {onboardingStep < ONBOARDING_SLIDES.length - 1 ? (
-                <>
-                  <Pressable onPress={() => setOnboardingStep((step) => step + 1)} style={[styles.primaryAction, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.primaryActionText}>Next</Text>
-                  </Pressable>
-                  <Pressable onPress={finishOnboarding} style={[styles.secondaryAction, { borderColor: colors.border }]}>
-                    <Text style={[styles.secondaryActionText, { color: colors.foreground }]}>Skip</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable onPress={finishOnboarding} style={[styles.primaryAction, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.primaryActionText}>Got it</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </ScreenContainer>
+      ) : null}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { paddingTop: spacing.xxl, paddingBottom: spacing.huge },
-  header: { marginBottom: spacing.xl },
-  title: { ...typography.display },
-  date: { ...typography.body, marginTop: spacing.xs },
-  columns: { flexDirection: "row", alignItems: "flex-start", gap: spacing.xxl },
-  leftColumn: { width: 400 },
-  rightColumn: { flex: 1 },
-  listBlock: { marginTop: spacing.xl },
-  inputBox: { flexDirection: "row", alignItems: "center", borderRadius: 22, borderWidth: 1, padding: spacing.sm },
-  input: { flex: 1, ...typography.body, paddingHorizontal: spacing.md, height: 40 },
-  micButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  hint: { ...typography.caption, marginTop: spacing.sm, marginLeft: spacing.md },
-  whenToggle: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderWidth: 1, borderRadius: radii.card, padding: spacing.md, marginTop: spacing.md },
-  whenToggleText: { flex: 1, ...typography.bodySmall, fontWeight: "700" },
-  saveButton: { minHeight: 52, borderRadius: radii.card, marginTop: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
-  saveText: { color: "#FFFFFF", ...typography.body, fontWeight: "800" },
-  group: { marginBottom: spacing.xl },
-  groupLabel: { ...typography.label, marginBottom: spacing.sm },
-  card: { borderWidth: 1, borderRadius: radii.card, padding: spacing.lg, marginBottom: spacing.sm },
-  cardMain: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  cardCopy: { flex: 1 },
-  cardTitle: { ...typography.body, fontWeight: "800" },
-  cardWhen: { ...typography.caption, marginTop: spacing.xs },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, borderTopWidth: 1, marginTop: spacing.md, paddingTop: spacing.md },
-  actionButton: { minHeight: 34, paddingHorizontal: spacing.md, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
-  actionText: { fontSize: 11, fontWeight: "800" },
-  empty: { alignItems: "center", paddingVertical: spacing.xxxl, gap: spacing.sm },
-  emptyTitle: { ...typography.subtitle, fontWeight: "700" },
-  emptyBody: { ...typography.bodySmall, textAlign: "center" },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  toastStack: { position: "absolute", left: 0, right: 0, bottom: 24, alignItems: "center", gap: spacing.sm },
-  toast: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radii.card },
-  toastText: { color: "#FFFFFF", ...typography.caption, fontWeight: "700" },
-  toastAction: { color: "#78BDC4", ...typography.caption, fontWeight: "800", marginLeft: spacing.sm },
-  modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,36,42,0.46)" },
-  sheet: { maxHeight: "92%", borderTopLeftRadius: radii.sheet + 4, borderTopRightRadius: radii.sheet + 4, padding: spacing.xxl, paddingBottom: spacing.xxxl },
-  wideSheet: { width: "100%", maxWidth: 560, alignSelf: "center" },
-  sheetHandle: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: "#CBD5D3", marginBottom: spacing.xl },
-  sheetEyebrow: { ...typography.label, marginBottom: spacing.sm },
-  sheetActions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xl },
-  primaryAction: { flex: 1, minHeight: 50, borderRadius: radii.chip + 3, alignItems: "center", justifyContent: "center" },
-  primaryActionText: { color: "#FFFFFF", ...typography.body, fontWeight: "800" },
-  secondaryAction: { flex: 0.6, minHeight: 50, borderRadius: radii.chip + 3, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  secondaryActionText: { ...typography.body, fontWeight: "700" },
-  dialog: { width: "92%", maxWidth: 460, alignSelf: "center", borderRadius: radii.sheet, padding: spacing.xl },
-  dialogIcon: { alignItems: "center", marginBottom: spacing.md },
-  dialogTitle: { ...typography.title, textAlign: "center" },
-  dialogBody: { ...typography.body, textAlign: "center", marginTop: spacing.sm, marginBottom: spacing.lg },
-  dots: { flexDirection: "row", justifyContent: "center", gap: 6 },
-});

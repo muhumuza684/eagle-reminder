@@ -1,25 +1,19 @@
 import { Link, Stack } from "expo-router";
-import { StyleSheet, View } from "react-native";
-import { Title, Body } from "@/components/ui/primitives";
-import { useColors } from "@/hooks/use-colors";
-import { spacing } from "@/constants/spacing";
+import { Text, View } from "react-native";
+import { FONT } from "@/constants/fonts";
+import { useTheme } from "@/lib/theme";
 
 export default function NotFoundScreen() {
-  const c = useColors();
+  const { finish: c } = useTheme();
   return (
     <>
       <Stack.Screen options={{ title: "Not found" }} />
-      <View style={[styles.container, { backgroundColor: c.background }]}>
-        <Title>This screen doesn't exist.</Title>
-        <Link href="/" style={styles.link}>
-          <Body color={c.primary}>Go to home screen</Body>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 14, backgroundColor: c.b0 }}>
+        <Text style={{ color: c.m1, fontFamily: FONT.display, fontSize: 30, textAlign: "center" }}>This page doesn&apos;t exist.</Text>
+        <Link href="/" style={{ color: c.ink, fontFamily: FONT.strong, fontSize: 14 }}>
+          Back to the watch
         </Link>
       </View>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xxl, gap: spacing.md },
-  link: { marginTop: spacing.sm },
-});

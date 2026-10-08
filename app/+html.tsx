@@ -33,12 +33,12 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
 
-        <meta name="theme-color" content="#012C3D" />
+        <meta name="theme-color" content="#090706" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta
           name="apple-mobile-web-app-status-bar-style"
-          content="default"
+          content="black-translucent"
         />
 
         <link rel="manifest" href="/manifest.json" />
@@ -47,6 +47,7 @@ export default function Root({ children }: PropsWithChildren) {
         <script dangerouslySetInnerHTML={{ __html: SERVICE_WORKER_SCRIPT }} />
 
         <ScrollViewStyleReset />
+        <style dangerouslySetInnerHTML={{ __html: "html,body{background:#090706}" }} />
       </head>
 
       <body>{children}</body>

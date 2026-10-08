@@ -59,7 +59,7 @@ export async function requestLocalNotificationPermission() {
   return permission === 'granted';
 }
 
-export async function scheduleReminder(commitmentId: string, title: string, when: Date): Promise<string> {
+export async function scheduleReminder(commitmentId: string, title: string, when: Date, _tone?: string): Promise<string> {
   return browserTimer(`reminder:${commitmentId}`, when.getTime(), 'Reminder', title, { route: '/', commitmentId });
 }
 

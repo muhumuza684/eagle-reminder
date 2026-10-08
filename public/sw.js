@@ -1,4 +1,4 @@
-const CACHE_NAME = "d-eagle-pwa-v2";
+const CACHE_NAME = "d-eagle-pwa-v3";
 
 const APP_SHELL = [
   "/",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "/offline.html",
   "/manifest.json",
   "/icon.png",
+  "/icon-maskable.png",
   "/apple-touch-icon.png",
 ];
 

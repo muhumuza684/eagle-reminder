@@ -12,6 +12,8 @@ export type ParsedCommitment = {
   status: "active";
   riskState: "stable" | "at_risk";
   recurrence: Recurrence;
+  /** True when the text itself said when (a time, day, date or "in 2 hours"). */
+  explicit: boolean;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -264,5 +266,6 @@ export function parseCommitment(text: string, now: Date = new Date()): ParsedCom
     status: "active",
     riskState: hour >= 18 ? "at_risk" : "stable",
     recurrence,
+    explicit: relative !== null || time !== null || hasToday || hasTomorrow || calendar !== null || day !== null,
   };
 }
