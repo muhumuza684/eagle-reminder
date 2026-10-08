@@ -1,5 +1,10 @@
 ## Noir luxury redesign
 
+- Fixed the pale layer the router painted over the design; screens and the navigation theme are now see-through.
+- Faster first load: fonts are 65 KB (was 1.3 MB), the page no longer waits for them, and Netlify caches hashed files for a year.
+- Voice typing explains itself: it shows when it is listening, what it heard, and why it failed (blocked microphone, no speech, offline, unsupported browser).
+- Wider date cards on the watch so FRI, OCT and the like fit.
+
 - New watch-face home screen with a rotating minute track, seconds hand, globe, tourbillon and flip date.
 - Three motions that arrive exactly on time: Orbit, Mainspring and Express (Settings > Motion, with Preview).
 - Reminders ring until answered: repeating, louder chime with vibration; Done or Snooze 10 min.

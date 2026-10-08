@@ -17,6 +17,15 @@ import { useTheme } from "@/lib/theme";
 type Ringing = { id: string | null; title: string; demo: boolean };
 type Toast = { text: string; undo?: boolean };
 
+const VOICE_ERRORS: Record<string, string> = {
+  "not-allowed": "The microphone is blocked. Allow it in your browser's site settings, then tap the mic again.",
+  "service-not-allowed": "The microphone is blocked. Allow it in your browser's site settings, then tap the mic again.",
+  "no-speech": "I didn't hear anything. Tap the mic and try again.",
+  "audio-capture": "No microphone was found on this device.",
+  network: "Voice typing needs an internet connection.",
+  default: "Voice didn't work this time. You can type it instead.",
+};
+
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 export default function TodayScreen() {
@@ -89,18 +98,27 @@ export default function TodayScreen() {
     flash(`Done — I'll remind you at ${clock12(when)}`);
   };
 
-  // ---- voice ----
+  // ---- voice: tap, speak, check, Set ----
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const voice = useVoiceCapture({
     onResult: ({ transcript, isFinal }) => {
       if (transcript) setText(transcript);
-      if (isFinal) setListening(false);
+      if (isFinal) {
+        setListening(false);
+        setTouched(false); // what you said wins over the day and time controls
+        setVoiceNote(null);
+      }
     },
-    onError: () => setListening(false),
+    onError: (reason) => {
+      setListening(false);
+      setVoiceNote(VOICE_ERRORS[reason ?? ""] ?? VOICE_ERRORS.default);
+    },
     onEnd: () => setListening(false),
   });
   const toggleVoice = async () => {
+    setVoiceNote(null);
     if (!voice.isSupported) {
-      flash("Voice capture is not available on this device");
+      setVoiceNote("Voice typing works in Chrome or Edge. In this browser, please type it instead.");
       return;
     }
     if (listening) {
@@ -108,7 +126,9 @@ export default function TodayScreen() {
       setListening(false);
       return;
     }
-    setListening(await voice.start());
+    const started = await voice.start();
+    setListening(started);
+    if (!started) setVoiceNote(VOICE_ERRORS.default);
   };
 
   // ---- the moving part reaches the goal: ring until answered ----
@@ -269,7 +289,7 @@ export default function TodayScreen() {
           onPress={toggleVoice}
           accessibilityRole="button"
           accessibilityLabel={listening ? "Stop listening" : "Speak a reminder"}
-          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: listening ? 2 : 1, borderColor: listening ? c.gem : c.bd, alignItems: "center", justifyContent: "center" }}
+          style={{ width: 44, height: 44, borderRadius: 22, borderWidth: listening ? 2 : 1, borderColor: listening ? c.gem : c.bd, backgroundColor: listening ? c.cd : "transparent", alignItems: "center", justifyContent: "center" }}
         >
           <Svg width={18} height={18} viewBox="0 0 24 24">
             <Path fill={listening ? c.gem : c.ink} d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11z" />
@@ -277,11 +297,19 @@ export default function TodayScreen() {
         </Pressable>
         <Pill label="Set" primary big onPress={onSet} />
       </View>
-      <Text style={{ color: c.mut, fontFamily: FONT.regular, fontSize: 12, textAlign: "center" }}>
-        {fromText ? "From your words: " : "I'll remind you "}
-        <Text style={{ color: c.m1, fontFamily: FONT.body }}>
-          {dayLabel(when)} · {clock12(when)}
-        </Text>
+      <Text accessibilityLiveRegion="polite" style={{ color: voiceNote ? c.warn : c.mut, fontFamily: FONT.regular, fontSize: 12, textAlign: "center", minHeight: 32 }}>
+        {voiceNote ? (
+          voiceNote
+        ) : listening ? (
+          <>Listening… say it like “Call Mum tomorrow at 7 pm”</>
+        ) : (
+          <>
+            {fromText ? "Heard it. Tap Set to remind you " : "I'll remind you "}
+            <Text style={{ color: c.m1, fontFamily: FONT.body }}>
+              {dayLabel(when)} · {clock12(when)}
+            </Text>
+          </>
+        )}
       </Text>
     </View>
   );

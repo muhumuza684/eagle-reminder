@@ -4,3 +4,19 @@
 
 [build.environment]
   NODE_VERSION = "20"
+# Hashed files never change, so browsers may keep them for a year (a return visit loads instantly).
+[[headers]]
+  for = "/_expo/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The service worker and page must always be fresh so updates reach people.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

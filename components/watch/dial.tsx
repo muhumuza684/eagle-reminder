@@ -32,7 +32,11 @@ export function Dial({ size, scene, goals, current, demoUntil, ringing, flip, on
   const flipAt = useRef(0);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 33);
+    // About 20 frames a second is smooth enough and kind to phones; stop entirely when the tab is hidden.
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      setNow(Date.now());
+    }, 50);
     return () => clearInterval(id);
   }, []);
 
@@ -217,14 +221,14 @@ export function Dial({ size, scene, goals, current, demoUntil, ringing, flip, on
         {timeText}
       </SvgText>
       {cards.map((text, i) => {
-        const x = 84 + i * 46;
+        const x = 78 + i * 50;
         return (
           <G key={i}>
-            <Rect x={x} y={158} width={40} height={32} rx={6} fill={c.cd} stroke={c.bd} />
+            <Rect x={x} y={158} width={44} height={32} rx={6} fill={c.cd} stroke={c.bd} />
             <Circle cx={x} cy={174} r={1.6} fill={c.m2} />
-            <Circle cx={x + 40} cy={174} r={1.6} fill={c.m2} />
+            <Circle cx={x + 44} cy={174} r={1.6} fill={c.m2} />
             <G opacity={flipK} transform={`translate(0 174) scale(1 ${0.15 + 0.85 * flipK}) translate(0 -174)`}>
-              <SvgText x={x + 20} y={181} fontSize={20} fontFamily={FONT.displayBold} fill="url(#mg)" textAnchor="middle">
+              <SvgText x={x + 22} y={180} fontSize={17} fontFamily={FONT.displayBold} fill="url(#mg)" textAnchor="middle">
                 {text}
               </SvgText>
             </G>

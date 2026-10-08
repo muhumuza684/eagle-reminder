@@ -7,7 +7,7 @@ export type VoiceResult = {
 
 export type VoiceCaptureOptions = {
   onResult: (result: VoiceResult) => void;
-  onError?: () => void;
+  onError?: (reason?: string) => void;
   onEnd?: () => void;
 };
 
@@ -18,7 +18,7 @@ type SpeechRecognitionInstance = {
   start: () => void;
   stop: () => void;
   onresult: ((event: any) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
 
@@ -49,12 +49,12 @@ export function useVoiceCapture(options: VoiceCaptureOptions) {
     recognition.interimResults = true;
     recognition.continuous = false;
     recognition.onresult = (event) => {
-      const result = event.results?.[event.resultIndex ?? event.results.length - 1]?.[0];
+      const entry = event.results?.[event.resultIndex ?? event.results.length - 1];
+      const result = entry?.[0];
       if (!result?.transcript) return;
-      const isFinal = Boolean(event.results?.[event.resultIndex ?? 0]?.isFinal);
-      optionsRef.current.onResult({ transcript: result.transcript, isFinal });
+      optionsRef.current.onResult({ transcript: result.transcript, isFinal: Boolean(entry?.isFinal) });
     };
-    recognition.onerror = () => optionsRef.current.onError?.();
+    recognition.onerror = (event: { error?: string }) => optionsRef.current.onError?.(event?.error);
     recognition.onend = () => optionsRef.current.onEnd?.();
 
     recognitionRef.current = recognition;

@@ -27,6 +27,10 @@ Reminders use browser notifications, shown through the service worker so Android
 
 When the browser is closed or the phone suspends the PWA, web timers do not run. Delivering reminders then needs Web Push, which needs a server, and this app deliberately has none.
 
+## Speed
+
+The first visit downloads the app (about 370 KB compressed) and five Latin-only WOFF2 fonts (65 KB in total, `assets/fonts/`; `metro.config.js` lets the bundler handle them). The page never waits for fonts, and it draws at about 20 frames a second and pauses while the tab is hidden. `netlify.toml` tells browsers to keep the hashed files for a year, so a return visit loads from the device.
+
 ## Hosting
 
 `npm run build:web` writes the site to `web-build/` and then moves `assets/node_modules` to `assets/vendor` (`scripts/relocate-assets.mjs`), because some hosts silently skip any folder named `node_modules`. Netlify builds this from GitHub using `netlify.toml` (build `npm run build:web`, publish `web-build`, Node 20). Every push to the production branch redeploys. The site must be served from the root of an https address, because the manifest and service worker use root paths.

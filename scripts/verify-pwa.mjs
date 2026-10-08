@@ -21,6 +21,8 @@ const requiredFiles = [
   'lib/watch.ts',
   'components/watch/dial.tsx',
   'assets/sounds/crystal.wav',
+  'assets/fonts/CormorantGaramond-SemiBold.woff2',
+  'metro.config.js',
   'lib/notifications.ts',
   'components/date-time-field.tsx',
   'hooks/use-voice-capture.ts',
