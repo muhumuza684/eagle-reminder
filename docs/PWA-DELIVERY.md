@@ -2,7 +2,7 @@
 
 ## What it is
 
-D-Eagle Hub is a luxury reminders watch. You say or type a reminder, pick a day and time, and a gold moving part travels the ring and arrives exactly when the reminder is due. It is built with React, Expo Router and React Native Web. The PWA is the primary runtime, and the same code builds the Android app with `eas build`. Reminders and settings stay on the device (encrypted in browser storage). There is no account, server or database.
+D-Eagle Hub is a luxury reminders watch. You say or type a reminder, pick a day and time, and a gold moving part travels the ring and arrives exactly when the reminder is due. It is built with React, Expo Router and React Native Web. The PWA is the only runtime. Reminders and settings stay on the device (encrypted in browser storage). There is no account, server or database.
 
 ## The design
 
@@ -21,18 +21,11 @@ D-Eagle Hub is a luxury reminders watch. You say or type a reminder, pick a day 
 - `app/+html.tsx` - links the manifest and registers the service worker (not on localhost, so development never runs on a stale copy)
 - `scripts/verify-pwa.mjs` - checks all of the above on every build
 
-Native-only code stays out of the web bundle through platform files:
-
-- `lib/native-services.ts` (web) and `lib/native-services.native.ts`
-- `lib/secure-storage.web.ts` and `lib/secure-storage.native.ts`
-- `hooks/use-voice-capture.web.ts` and `hooks/use-voice-capture.native.ts`
-- `components/date-time-field.web.tsx` and `components/date-time-field.native.tsx`
-
 ## Reminder behavior
 
-- **PWA**: browser notifications, shown through the service worker so Android Chrome accepts them. Timers run while the app is open (a browser tab, or the installed app running). While it is open, the in-app card rings until you answer. Reminders saved earlier are scheduled again when the app opens.
-- **Android app**: each reminder schedules ten notifications, one a minute apart, with the chosen ringtone on its own notification channel. Done or Snooze cancels the rest, so it keeps nudging until answered, even when the app is closed.
-- When the browser is closed or the phone suspends the PWA, web timers do not run. Delivering reminders then needs Web Push, which needs a server, and this app deliberately has none. Use the Android app for that.
+Reminders use browser notifications, shown through the service worker so Android Chrome accepts them. Timers run while the PWA is open (a browser tab, or the installed app running). While it is open, the in-app card rings until you answer, with a louder chime each time, and the phone vibrates where the browser allows it. Reminders saved earlier are scheduled again when the app opens.
+
+When the browser is closed or the phone suspends the PWA, web timers do not run. Delivering reminders then needs Web Push, which needs a server, and this app deliberately has none.
 
 ## Hosting
 
@@ -54,4 +47,4 @@ npm test
 npm run build:web
 ```
 
-Then follow `docs/NATIVE_VALIDATION_CHECKLIST.md` on a real device.
+Then follow `docs/DEVICE_CHECKLIST.md` on a real device.

@@ -12,16 +12,15 @@ Run these after any change that touches reminders, storage, sound or the watch.
 - [ ] Settings > Motion > Preview runs each motion for about 20 seconds and ends with the card ringing.
 - [ ] Settings > Finish changes the colours; Settings > Ringtone plays each sound. Both persist after a refresh.
 
-## Phone (an installed build, not Expo Go)
+## Phone (the installed PWA)
 
-- [ ] The app opens with no red error screen.
+- [ ] Open the address in Chrome, then menu > Install app. The eagle icon appears on the home screen.
+- [ ] The installed app opens with no error screen, and the icons and fonts are drawn.
 - [ ] Allow notifications when asked.
 - [ ] For testing, set Quiet hours and Quiet hours end to the same time in Settings (this switches them off).
-- [ ] Set a reminder two minutes ahead and lock the screen. The notification arrives on time with the chosen ringtone.
-- [ ] Leave it unanswered: another notification arrives a minute later.
-- [ ] Open the app and tap Done: no further notifications arrive.
-- [ ] Snooze 10 min: the reminder moves ten minutes on and only that one notifies.
-- [ ] Change the ringtone in Settings, then set a new reminder: it uses the new sound.
+- [ ] Keep the app open, set a reminder two minutes ahead, and wait. The watch arrives at the goal, the card rings and the notification shows.
+- [ ] Leave it unanswered: the chime repeats, louder each time, until you tap Done or Snooze 10 min.
+- [ ] Snooze 10 min: the reminder moves ten minutes on.
 - [ ] Close the app completely and reopen it: the reminders are still listed.
 - [ ] Turn Reminders off in Settings: a new reminder does not notify.
 

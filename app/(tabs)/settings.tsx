@@ -5,7 +5,7 @@ import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import DateTimeField from "@/components/date-time-field";
 import { Card, Eyebrow, Pill } from "@/components/luxe";
 import { FONT } from "@/constants/fonts";
-import { requestLocalNotificationPermission } from "@/lib/native-services";
+import { requestLocalNotificationPermission } from "@/lib/notifications";
 import { requestPreview } from "@/lib/preview-bus";
 import type { FinishKey, RingtoneKey, SceneKey } from "@/lib/preferences-defaults";
 import { RINGTONES, RINGTONE_KEYS, playSound, stopSound } from "@/lib/sound";

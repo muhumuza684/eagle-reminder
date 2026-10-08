@@ -9,7 +9,7 @@ import { useVoiceCapture } from "@/hooks/use-voice-capture";
 import { whenOf } from "@/lib/commitment";
 import { parseCommitment } from "@/lib/commitment-parser";
 import { DAY_ABBR, MONTH_ABBR, clock12, dayLabel, greeting, relativeTime } from "@/lib/format";
-import { requestLocalNotificationPermission } from "@/lib/native-services";
+import { requestLocalNotificationPermission } from "@/lib/notifications";
 import { onPreview } from "@/lib/preview-bus";
 import { HORN, RINGTONES, playSound, stopSound } from "@/lib/sound";
 import { useTheme } from "@/lib/theme";
@@ -23,7 +23,7 @@ export default function TodayScreen() {
   const { finish: c, prefs } = useTheme();
   const { width, height } = useWindowDimensions();
   const wide = width >= 840;
-  const reminders = useReminders(prefs.ringtone);
+  const reminders = useReminders();
   const { cur, open } = reminders;
 
   const [now, setNow] = useState(() => new Date());

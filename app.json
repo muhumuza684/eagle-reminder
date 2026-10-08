@@ -7,26 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "deaglehub",
     "userInterfaceStyle": "dark",
-    "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#090706",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ],
-      "package": "com.anonymous.deaglehub"
-    },
     "web": {
       "favicon": "./assets/images/favicon.png",
       "name": "D-Eagle Hub",
@@ -39,39 +19,16 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#090706"
-        }
-      ],
-      "expo-speech-recognition",
-      "@react-native-community/datetimepicker",
-      "expo-secure-store",
-      [
-        "expo-notifications",
-        {
-          "sounds": [
-            "./assets/sounds/crystal.wav",
-            "./assets/sounds/marimba.wav",
-            "./assets/sounds/glass.wav",
-            "./assets/sounds/musicbox.wav"
-          ]
-        }
-      ]
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "67f7b460-bc9b-41c0-a586-58795766de74"
-      }
+      "router": {}
     },
-    "owner": "bryt_ma_tech"
+    "platforms": [
+      "web"
+    ]
   }
 }

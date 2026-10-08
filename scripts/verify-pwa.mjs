@@ -21,14 +21,10 @@ const requiredFiles = [
   'lib/watch.ts',
   'components/watch/dial.tsx',
   'assets/sounds/crystal.wav',
-  'lib/native-services.ts',
-  'lib/native-services.native.ts',
-  'components/date-time-field.web.tsx',
-  'components/date-time-field.native.tsx',
-  'hooks/use-voice-capture.web.ts',
-  'hooks/use-voice-capture.native.ts',
-  'lib/secure-storage.web.ts',
-  'lib/secure-storage.native.ts',
+  'lib/notifications.ts',
+  'components/date-time-field.tsx',
+  'hooks/use-voice-capture.ts',
+  'lib/secure-storage.ts',
 ];
 
 for (const file of requiredFiles) {

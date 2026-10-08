@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readJsonSafely, writeJsonSafely } from "@/lib/safe-json";
 import { parseCommitment } from "@/lib/commitment-parser";
 import { createClientId } from "@/lib/identity";
-import { cancelReminder, scheduleReminder } from "@/lib/native-services";
+import { cancelReminder, scheduleReminder } from "@/lib/notifications";
 import { nextScheduledDate, needsRegeneration } from "@/lib/recurrence";
 import { isOpen, localDateKey, whenOf, type Commitment } from "@/lib/commitment";
 import { formatHHMM } from "@/lib/format";
-import type { RingtoneKey } from "@/lib/preferences-defaults";
 
 const STORAGE_KEY = "deagle-commitments-v1";
 const REMINDERS_KEY = "deagle-reminders-v1";
@@ -20,7 +19,7 @@ const saveIds = () => {
   writeJsonSafely(REMINDERS_KEY, reminderIds).catch(() => undefined);
 };
 
-async function applyReminder(item: Commitment, tone: RingtoneKey) {
+async function applyReminder(item: Commitment) {
   const existing = reminderIds[item.id];
   if (existing) {
     delete reminderIds[item.id];
@@ -29,7 +28,7 @@ async function applyReminder(item: Commitment, tone: RingtoneKey) {
   if (isOpen(item)) {
     const when = whenOf(item);
     if (when) {
-      const scheduled = await scheduleReminder(item.id, item.title, when, tone);
+      const scheduled = await scheduleReminder(item.id, item.title, when);
       if (scheduled) reminderIds[item.id] = scheduled;
     }
   }
@@ -38,16 +37,13 @@ async function applyReminder(item: Commitment, tone: RingtoneKey) {
 
 const byWhen = (a: Commitment, b: Commitment) => (whenOf(a)?.getTime() ?? 0) - (whenOf(b)?.getTime() ?? 0);
 
-export function useReminders(tone: RingtoneKey) {
+export function useReminders() {
   const [items, setItems] = useState<Commitment[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [removed, setRemoved] = useState<Commitment | null>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const toneRef = useRef(tone);
-  toneRef.current = tone;
-  const lastTone = useRef(tone);
 
   const open = useMemo(() => items.filter(isOpen).sort(byWhen), [items]);
   const cur = open.find((item) => item.id === selectedId) ?? open[0] ?? null;
@@ -68,7 +64,7 @@ export function useReminders(tone: RingtoneKey) {
       setItems(clean);
       setHydrated(true);
       clean.forEach((item) => {
-        applyReminder(item, toneRef.current).catch(() => undefined);
+        applyReminder(item).catch(() => undefined);
       });
     })();
     return () => {
@@ -84,16 +80,6 @@ export function useReminders(tone: RingtoneKey) {
     }, 300);
     return () => clearTimeout(timer);
   }, [items, hydrated]);
-
-  // A new ringtone applies to everything already scheduled.
-  useEffect(() => {
-    if (lastTone.current === tone) return;
-    lastTone.current = tone;
-    if (!hydrated) return;
-    itemsRef.current.filter(isOpen).forEach((item) => {
-      applyReminder(item, tone).catch(() => undefined);
-    });
-  }, [tone, hydrated]);
 
   // Repeating reminders: once one is finished, create the next occurrence.
   useEffect(() => {
@@ -112,7 +98,7 @@ export function useReminders(tone: RingtoneKey) {
     }));
     setItems((all) => [...all.map((item) => (ids.has(item.id) ? { ...item, recurrence: "none" as const } : item)), ...fresh]);
     fresh.forEach((item) => {
-      applyReminder(item, toneRef.current).catch(() => undefined);
+      applyReminder(item).catch(() => undefined);
     });
   }, [items, hydrated]);
 
@@ -126,7 +112,7 @@ export function useReminders(tone: RingtoneKey) {
   const update = useCallback((id: string, patch: Partial<Commitment>) => {
     const current = itemsRef.current.find((item) => item.id === id);
     setItems((all) => all.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-    if (current) applyReminder({ ...current, ...patch }, toneRef.current).catch(() => undefined);
+    if (current) applyReminder({ ...current, ...patch }).catch(() => undefined);
   }, []);
 
   /** Adds a reminder. `when` overrides whatever time the words themselves carried. */
@@ -139,7 +125,7 @@ export function useReminders(tone: RingtoneKey) {
       next.timeEnd = formatHHMM(new Date(when.getTime() + 30 * 60000));
     }
     setItems((all) => [...all, next]);
-    applyReminder(next, toneRef.current).catch(() => undefined);
+    applyReminder(next).catch(() => undefined);
     return next;
   }, []);
 
@@ -162,7 +148,7 @@ export function useReminders(tone: RingtoneKey) {
     const item = itemsRef.current.find((entry) => entry.id === id);
     if (!item) return;
     setItems((all) => all.filter((entry) => entry.id !== id));
-    applyReminder({ ...item, deletedAt: new Date().toISOString() }, toneRef.current).catch(() => undefined);
+    applyReminder({ ...item, deletedAt: new Date().toISOString() }).catch(() => undefined);
     setRemoved(item);
   }, []);
 
@@ -171,7 +157,7 @@ export function useReminders(tone: RingtoneKey) {
     if (!item) return;
     setRemoved(null);
     setItems((all) => [...all, item]);
-    applyReminder(item, toneRef.current).catch(() => undefined);
+    applyReminder(item).catch(() => undefined);
   }, [removed]);
 
   return { open, cur, select: setSelectedId, add, done, snooze, remove, undo, removed, hydrated };
