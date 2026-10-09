@@ -4,19 +4,23 @@ Run these after any change that touches reminders, storage, sound or the watch.
 
 ## Web (`npx expo start --web`, or the Netlify address)
 
-- [ ] The page loads without an error screen, and again after a refresh. Icons are drawn (no empty boxes).
-- [ ] Type "Call Mum in 2 minutes" and tap Set. The Reminders chip counts 1 and the message names it.
+- [ ] The page loads without an error screen, and again after a refresh. Icons, gold fills and the Set button are all visible.
+- [ ] Today shows the watch, the three steps and Quick style. Reminders and Settings open from the bottom bar.
+- [ ] Step 1: type "Call Mum in 2 minutes". Step 3 shows the time in words and the hollow gem moves on the watch.
+- [ ] Step 2: each chip changes the time. "Pick a time..." shows a date and a time field.
+- [ ] Set reminder: a toast confirms, the Reminders badge counts it, and the Reminders page lists it.
+- [ ] Reminders page: Follow moves the watch to that reminder; Done completes it; the X removes it and Undo brings it back.
 - [ ] Refresh before it fires: the reminder is still listed and still fires.
-- [ ] Reminders > Follow picks which reminder the watch follows; the X removes it and Undo brings it back.
-- [ ] At the due time a card rings (louder each time) until you tap Done or Snooze 10 min.
-- [ ] Settings > Motion > Preview runs each motion for about 20 seconds and ends with the card ringing.
-- [ ] Settings > Finish changes the colours; Settings > Ringtone plays each sound. Both persist after a refresh.
+- [ ] At the due time, on any page, a card rings (louder each time) until you tap Done or Snooze 10 min.
+- [ ] Quick style: tapping a ringtone plays it; the finish changes the colours; the motion changes the watch. All three persist after a refresh.
+- [ ] Preview the motion runs about 20 seconds and ends with the card ringing.
+- [ ] Settings: Reminders off stops new notifications; Quiet hours changes stay after a refresh.
 
 ## Phone (the installed PWA)
 
 - [ ] Open the address in Chrome, then menu > Install app. The eagle icon appears on the home screen.
 - [ ] The installed app opens with no error screen, and the icons and fonts are drawn.
-- [ ] Allow notifications when asked.
+- [ ] Allow notifications when asked. On a phone, Quick style opens from its button above the bottom bar.
 - [ ] For testing, set Quiet hours and Quiet hours end to the same time in Settings (this switches them off).
 - [ ] Keep the app open, set a reminder two minutes ahead, and wait. The watch arrives at the goal, the card rings and the notification shows.
 - [ ] Leave it unanswered: the chime repeats, louder each time, until you tap Done or Snooze 10 min.

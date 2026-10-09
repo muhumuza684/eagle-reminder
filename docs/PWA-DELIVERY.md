@@ -6,11 +6,15 @@ D-Eagle Hub is a luxury reminders watch. You say or type a reminder, pick a day 
 
 ## The design
 
-- **Noir with five finishes** (Settings > Finish): Champagne Gold, Rose Gold, Emerald & Gold, Sapphire & Platinum, Ruby & Gold. Each is mostly black, one metal and one gem colour (`lib/theme.tsx`).
-- **The watch** (`components/watch/dial.tsx`): rotating minute track, flowing lane, sweeping seconds hand, a turning globe, a tourbillon cage and a flip date window.
-- **Three motions** (Settings > Motion, each with a Preview): Orbit (a gold bead with a trail of light), Mainspring (a power-reserve arc and a racing tourbillon) and Express (a gold locomotive that slows into a station arch). The position maths is in `lib/watch.ts` and is unit-tested: at the due time the moving part is exactly on the goal.
-- **Ringing**: when the time arrives, a card appears and the ringtone repeats, getting louder, with vibration, until you tap Done or Snooze 10 min.
-- **Ringtones** (Settings > Ringtone): Crystal chime, Marimba, Glass bell, Music box, plus a train horn for Express. The files are in `assets/sounds/`.
+- **Three zones on a wide screen:** the watch on the left, the guided steps in the middle, and Quick style on the right. On a tablet the palette moves under the steps; on a phone it opens from a **Quick style** button.
+- **Guided steps** (`components/compose.tsx`): 1 What, 2 When (one-tap chips - In 10 min, In 1 hour, This evening, Tomorrow 9 AM - or Pick a time with normal date and time fields), 3 Check and set (the result in words, the ringtone and motion it will use, and Set). Typing or saying a time ("gym Friday at 6pm") fills the day and time for you. A hollow gem on the watch shows where the reminder will land before you set it.
+- **Quick style** (`components/palette.tsx`): ringtone (tap to hear it), finish and motion, all in one place.
+- **Three pages** in the bottom bar: Today, Reminders (every reminder, with Follow, Done and delete with Undo; a count badge shows how many wait) and Settings (only Reminders on/off and Quiet hours).
+- **Noir with five finishes:** Champagne Gold, Rose Gold, Emerald & Gold, Sapphire & Platinum, Ruby & Gold (`lib/theme.tsx`). Every metal fill is a plain colour or a CSS gradient, never an SVG gradient reference, so nothing can fail to draw.
+- **The watch** (`components/watch/dial.tsx`): rotating minute track, flowing lane, sweeping seconds hand, turning globe, tourbillon and a flip date window.
+- **Three motions** (Preview the motion): Orbit, Mainspring and Express. The position maths is in `lib/watch.ts` and is unit-tested: at the due time the moving part is exactly on the goal.
+- **Ringing** (`lib/app-state.tsx`, `components/overlays.tsx`): when a reminder comes due, on any page, a card appears and the ringtone repeats, louder each time, with a buzz, until you tap Done or Snooze 10 min.
+- **Ringtones:** Crystal chime, Marimba, Glass bell, Music box, plus a train horn for Express (`assets/sounds/`).
 - **Icons are drawn with react-native-svg**, so there is no icon font to fail on a host. The eagle emblem is `components/watch/emblem.tsx`.
 
 ## What makes it a PWA

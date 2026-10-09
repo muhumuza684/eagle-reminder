@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHHMM, greeting, relativeTime } from "./format";
+import { dayWord, formatHHMM, greeting, relativeTime } from "./format";
 
 const NOW = new Date(2026, 9, 1, 15, 0, 0, 0);
 const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60000);
@@ -23,5 +23,13 @@ describe("greeting and clock text", () => {
 
   it("formats HH:MM with leading zeros", () => {
     expect(formatHHMM(new Date(2026, 9, 1, 7, 5))).toBe("07:05");
+  });
+});
+
+describe("dayWord", () => {
+  it("says Today, Tomorrow or the weekday", () => {
+    expect(dayWord(new Date(2026, 9, 1, 20), NOW)).toBe("Today");
+    expect(dayWord(new Date(2026, 9, 2, 9), NOW)).toBe("Tomorrow");
+    expect(dayWord(new Date(2026, 9, 5, 9), NOW)).toBe(new Date(2026, 9, 5).toLocaleDateString(undefined, { weekday: "long" }));
   });
 });

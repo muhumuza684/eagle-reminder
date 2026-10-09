@@ -1,5 +1,12 @@
 ## Noir luxury redesign
 
+- Guided steps: What, When (one-tap chips or a date and time picker), Check and set. Words you type or say fill in the day and time.
+- Three zones: watch on the left, steps in the middle, Quick style (ringtone, finish, motion) on the right; a Quick style button on phones.
+- A Reminders page in the bottom bar with a count badge, and a Settings page cut down to Reminders and Quiet hours.
+- A hollow gem on the watch shows where the reminder will land before you set it.
+- Every gold fill is now a plain colour or a CSS gradient. SVG gradient references were not drawing in some browsers, which hid the Set button, the ring and the time.
+- The ringing card works on every page, not only Today.
+
 - Fixed the pale layer the router painted over the design; screens and the navigation theme are now see-through.
 - Faster first load: fonts are 65 KB (was 1.3 MB), the page no longer waits for them, and Netlify caches hashed files for a year.
 - Voice typing explains itself: it shows when it is listening, what it heard, and why it failed (blocked microphone, no speech, offline, unsupported browser).

@@ -3,6 +3,7 @@ import { DefaultTheme, ThemeProvider as NavigationTheme } from "expo-router";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AppProvider } from "@/lib/app-state";
 import { ThemeProvider } from "@/lib/theme";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -26,9 +27,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <NavigationTheme value={SEE_THROUGH}>
+        <AppProvider>
         <Stack screenOptions={{ headerShown: false, animation: "none", contentStyle: { backgroundColor: "transparent" } }}>
           <Stack.Screen name="(tabs)" />
         </Stack>
+        </AppProvider>
         </NavigationTheme>
       </ThemeProvider>
     </SafeAreaProvider>
